@@ -88,23 +88,45 @@ TLC_init:
 
 	;; Must initialize current and target to 0 here, unless RAM is 0
 	;; by default
+
+	ldi	ZH,	hi8( currentChannelValues )
+	ldi	ZL,	lo8( currentChannelValues )
+	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
+	ldi	r19,	0
+
+initCurrentValuesLoop:	
+	dec	r16
+	breq	doneInitCurrentValues
+
+	st	Z+,	r19
+	rjmp	initCurrentValuesLoop
+
+doneInitCurrentValues:
+	ldi	ZH,	hi8( targetChannelValues )
+	ldi	ZL,	lo8( targetChannelValues )
+	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
+
+initTargetValuesLoop:	
+	dec	r16
+	breq	doneInitTargetValues
+
+	st	Z+,	r19
+	rjmp	initTargetValuesLoop
+
+doneInitTargetValues:	
+
 	ret				; return from subrutine
 
 ;; Should send next byte if there is more data to be sent
 TLC_spiInterrupt:
-	in	r0,	SREG		; bit 2 set means that brne will branch
-	push	r0			; push status register
-	push	r26			; push X register hi byte
-	push	r27			; push X register lo byte
+	in	REG_I_SCRATCH_R0,	SREG	; copy status register to r0
+	push	REG_I_SCRATCH_R0	; push status register = r0
+	push	XL			; push X register lo byte
+	push	XH			; push X register hi byte
 
 	;; Move on to the next TLC channel
-	dec	SPI_CHINDEX
+	dec	REG_I_SPI_BYTE_INDEX
 	brne	spiSendNext		; done!
-
-	;; ??? Not clear the purpose of this block ???
-	clr	r0			; erase status register
-	sbic	BLANK_PORT, BLANK_PIN	; skip next instruction if PWM active
-	inc	r0			; set carry flag ??? why ???
 
 	;; Sent last byte. Now make blank high to stop PWM, pulse XLAT,
 	;; make blank low
@@ -115,14 +137,10 @@ TLC_spiInterrupt:
 	sbi	XLAT_PORT, XLAT_PIN
 	cbi	XLAT_PORT, XLAT_PIN
 
-	;; if blank was 0, then clear it
-	sbrs	r0,	1		; Skip next if bit in register set
-	cbi	BLANK_PORT, BLANK_PIN
-
 	rjmp	spiReturn
 
 spiSendNext:
-	;; SPI_CHINDEX contains index of byte to send.
+	;; REG_I_SPI_BYTE_INDEX contains index of byte to send.
 	;;
 	;; Byte 0: high byte of channel 0 intensity
 	;; Byte 1: low nybble of channel 1 intensity, high nybble of channel 2
@@ -139,74 +157,76 @@ spiSendNext:
 	;; Track byte type in one register, channel index in another, drop
 	;; byte counter. Start with highest channel.
 
-	cp	SPI_BYTE_TYPE,	0
+	cp	REG_I_SPI_BYTE_TYPE,	0
 	brne	nextByteTypeNot0
 
-	lpm	r22,	Z+		; lpm = Load program memory
-	lsl	r22			; lsl = logical shift left
-	lsl	r22
-	lsl	r22
-	lsl	r22
-	lpm	r7,	Z+
-	lsr	r7
-	lsr	r7
-	lsr	r7
-	lsr	r7
-	or	r22,	r7
+	ld	REG_I_FIRST_BYTE,	Z+
+
+	lsl	REG_I_FIRST_BYTE		; lsl = logical shift left
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	
+	ld	REG_I_SECOND_BYTE,	Z+
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	or	REG_I_FIRST_BYTE,	REG_I_SECOND_BYTE
 
 	;; next byte type will be 2
-	ldi	r21,	2
-	mov	SPI_BYTE_TYPE,	r21
+	ldi	REG_I_SECOND_BYTE,	2
+	mov	REG_I_SPI_BYTE_TYPE,	REG_I_SECOND_BYTE
 
 	rjmp	sendByte
 
 nextByteTypeNot0:
-	cp	SPI_BYTE_TYPE,	1
+	cp	REG_I_SPI_BYTE_TYPE,	1
 	brne	nextByteTypeIs2
-	;; Byte type is 1, Z points to low byte
-	lpm	r22,	Z+
+	;; Byte type is 1, Z points to low byte. was r22
+	ld	REG_I_FIRST_BYTE,	Z+
 	;; Z now points to low byte
-	andi	r22,	0xf0
-	lpm	r7,	Z
+	andi	REG_I_FIRST_BYTE,	0xf0
+	ld	REG_I_SECOND_BYTE,	Z
 
-	lsr	r7
-	lsr	r7
-	lsr	r7
-	lsr	r7
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
 
-	or	r22,	r7
-	dec	SPI_BYTE_TYPE
+	or	REG_I_FIRST_BYTE,	REG_I_SECOND_BYTE
+	dec	REG_I_SPI_BYTE_TYPE
 
 	rjmp	sendByte	; one way of saying "goto" (uncondit. branch)
 
 nextByteTypeIs2:
-	lpm	r22,	Z+
+	ld	REG_I_FIRST_BYTE,	Z+
 
-	lsl	r22
-	lsl	r22
-	lsl	r22
-	lsl	r22
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
 
-	lpm	r7,	Z+
+	ld	REG_I_SECOND_BYTE,	Z+
 
-	lsr	r7
-	lsr	r7
-	lsr	r7
-	lsr	r7
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
 
-	or	r22, r7
+	or	REG_I_FIRST_BYTE, REG_I_SECOND_BYTE
 
-	dec	SPI_BYTE_TYPE
+	dec	REG_I_SPI_BYTE_TYPE
 
 sendByte:
-	out	SPDR,	r22		; SPDR = SPI data register
+	out	SPDR,	REG_I_FIRST_BYTE	; SPDR = SPI data register
 
 spiReturn:
 	;;  restore status register
-	pop	r27
-	pop	r26
-	pop	r0
-	out	SREG, 	r0		; reset status register
+	pop	XH
+	pop	XL
+	pop	REG_I_SCRATCH_R0
+	out	SREG, 	REG_I_SCRATCH_R0		; reset status register
 
 	reti				; return from interrupt
 
@@ -216,8 +236,8 @@ spiReturn:
 ;;;
 TLC_spiTimerInterrupt:
 	;; save status byte
-	in	r0, 0x3f
-	push	r0
+	in	REG_I_SCRATCH_R0, 0x3f
+	push	REG_I_SCRATCH_R0
 	push	XL
 	push	XH
 	
@@ -230,19 +250,20 @@ TLC_spiTimerInterrupt:
 	ldi	YL,	lo8( targetChannelValues )
 	ldi	YH,	hi8( targetChannelValues )
 
-	ldi	REG_I_CHANNEL_INDEX,	2 * 16 * NUMBER_TLC_CHIPS
+	ldi	REG_I_CHANNEL_INDEX,	16 * NUMBER_TLC_CHIPS
 
-	clr	r9		; R9 is change counter
+	clr	REG_I_CHANGE_COUNTER		; R2 is change counter
 
 checkDiffsLoop:
 	/* Calculate target - current */
-	ld	r0,	Y+	; r0=Target Low byte
-	ld	REG_I_LED_CURRENT_LOW,	X+	; r0=Current Low byte
-	sub	r0, REG_I_LED_CURRENT_LOW	; r0=lo8(target-current)
+	ld	REG_I_SCRATCH_R1,	Y+	; r0=Target High byte
+	ld	REG_I_LED_CURRENT_HIGH,	X+	; r0=Current High byte
 
-	ld	r0,	Y+	; Target Low byte
-	ld	REG_I_LED_CURRENT_HIGH,	X+	; Current High byte
-	sbc	r0, REG_I_LED_CURRENT_HIGH	; r25 = r25 - r0. r7:r8=diff
+	ld	REG_I_SCRATCH_R0,	Y+	; Target Low byte
+	ld	REG_I_LED_CURRENT_LOW,	X+	; Current High byte
+	
+	sub	REG_I_SCRATCH_R0, REG_I_LED_CURRENT_LOW	; r0=lo8(target-current)
+	sbc	REG_I_SCRATCH_R1, REG_I_LED_CURRENT_HIGH	; r1=hi8(target-current)
 
 	brne	modify
 
@@ -258,25 +279,26 @@ modify:
 	;; the current.
 	brmi	decrease
 
-	inc	r9
+	inc	REG_I_CHANGE_COUNTER
 	sbiw	XL,	2	; r26=X Move x ptr back to value we just compared
 	adiw	REG_I_LED_CURRENT_LOW,	1
+	st	X+,	REG_I_LED_CURRENT_HIGH ; Note: stored big endian
 	st	X+,	REG_I_LED_CURRENT_LOW
-	st	X+,	REG_I_LED_CURRENT_HIGH
 
 	rjmp	doneModifying
 
 decrease:
-	inc	r9
+	inc	REG_I_CHANGE_COUNTER
+	
 	sbiw	XL,	2	; Move x ptr back to value we just compared
 	sbiw	REG_I_LED_CURRENT_LOW,	1
-	st	X+,	REG_I_LED_CURRENT_LOW
 	st	X+,	REG_I_LED_CURRENT_HIGH
+	st	X+,	REG_I_LED_CURRENT_LOW
 
 	rjmp	doneModifying
 
 allUpdated:
-	tst	r9
+	tst	REG_I_CHANGE_COUNTER
 	breq	allDiffsZero
 
 	rjmp	startSending
@@ -296,21 +318,21 @@ startSending:
 	ldi	ZL,	lo8(currentChannelValues)
 	ldi	ZH,	hi8(currentChannelValues)
 
-	ldi	REG_I_CHANNEL_INDEX,	16 * NUMBER_TLC_CHIPS
-	mov	SPI_CHINDEX,	REG_I_CHANNEL_INDEX
+	ldi	REG_I_CHANNEL_INDEX,	16 * 2 * NUMBER_TLC_CHIPS 
+	mov	REG_I_SPI_BYTE_INDEX,	REG_I_CHANNEL_INDEX
 
-	ldi	REG_I_CHANNEL_INDEX,	1	; Byte Type
-	mov	r4,	REG_I_CHANNEL_INDEX
-
-	lpm	r0,	Z
-	out	SPDR,	r0	; Initiates transmission
+	clr	REG_I_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
+	inc	REG_I_SPI_BYTE_TYPE	; to 0 and then inc, due to reg limits
+	
+	ld	REG_I_SCRATCH_R0,	Z+
+	out	SPDR,	REG_I_SCRATCH_R0	; Initiates transmission
 
 returnFromInterrupt:
 	pop	XH
 	pop	XL
 	;;  restore status register
-	pop	r0
-	out	0x3f, r0
+	pop	REG_I_SCRATCH_R0
+	out	0x3f, REG_I_SCRATCH_R0
 
 	reti
 
@@ -318,7 +340,7 @@ returnFromInterrupt:
 ;;; Actual API
 ;;;
 ;;; Parameters: channel number in r10, intensity in r11:r12
-;;; Uses r10
+;;; Uses r10. Modifies REG_TLC_CHANNEL_NUMBER ! 
 ;;;
 TLC_setChannelTargetIntensity:
 	.global TLC_setChannelTargetIntensity
@@ -330,21 +352,27 @@ TLC_setChannelTargetIntensity:
 	add	XL,	REG_TLC_CHANNEL_NUMBER
 	adc	XH,	0
 
-	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
+	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
 
 	ret
 
 	.data
+	.org	0x100
 	;;
 	;; <number of channels> * 16 bits. (bits 15..x contain intensity sent
 	;; to TLC. In other words, shift right 4 times to get value to be sent.
+	;;
+	;; Stored big-endian to make sending to TLC chip algorithm easier
 	;;
 	.comm	currentChannelValues, (2 * 16 * NUMBER_TLC_CHIPS)
 
 	;;
 	;; 16 bit signed differences between desired value and current value
 	;;
+	;; Stored big-endian to be consistend with currentChannelValues
+	;;
+
 	.comm	targetChannelValues, 2 * 16 * NUMBER_TLC_CHIPS
 
 	.end

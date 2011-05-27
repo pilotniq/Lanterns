@@ -9,6 +9,15 @@ LDFLAGS = -nostdlib
 # USBPORT = /dev/parport0
 USBPORT = /dev/tty.usbserial-A6008gHF
 AVRDUDE_PARAMS = -b 19200
+simavr = ../simavr
+IPATH = -I${simavr}/include -I${simavr}/simavr/sim
+
+LDFLAGS=${simavr}/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
+
+#include ${simavr}/Makefile.common
+
+board_lantern: board_lantern.c
+	gcc -std=c99 $(CFLAGS) $(IPATH) board_lantern.c -o board_lantern $(LDFLAGS)
 
 main.o:	main.S
 tlc.o:	tlc.S config.h
