@@ -1,7 +1,7 @@
 *~
-*.s
 *.sh
 *.o
 *.hex
 wordClock
 config.h
+tlcTest
