@@ -93,7 +93,7 @@ TLC_init:
 	ldi	ZL,	lo8( currentChannelValues )
 	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
 	ldi	r19,	0
-
+	
 initCurrentValuesLoop:	
 	dec	r16
 	breq	doneInitCurrentValues
@@ -114,6 +114,7 @@ initTargetValuesLoop:
 	rjmp	initTargetValuesLoop
 
 doneInitTargetValues:	
+	clr	REG_I_SPI_BYTE_INDEX
 
 	ret				; return from subrutine
 
@@ -137,42 +138,32 @@ TLC_spiInterrupt:
 	sbi	XLAT_PORT, XLAT_PIN
 	cbi	XLAT_PORT, XLAT_PIN
 
+	cbi	BLANK_PORT, BLANK_PIN ; Start new PWM cycle
+	
 	rjmp	spiReturn
 
 spiSendNext:
 	;; REG_I_SPI_BYTE_INDEX contains index of byte to send.
 	;;
 	;; Byte 0: high byte of channel 0 intensity
-	;; Byte 1: low nybble of channel 1 intensity, high nybble of channel 2
-	;; Byte 2: low byte of channel 2
+	;; Byte 1: low nybble of channel 0 intensity, high nybble of channel 1
+	;; Byte 2: low byte of channel 1
 	;;
 	;; Repeat
 	;;
-	;; Call Byte 0 type 2, Z points to high byte
-	;; Call byte 1 type 1, Z points to low byte
-	;; Call byte 2 type 0, Z points to high byte
+	;; Call Byte 0 type 2, Z points to high byte of ch0
+	;; Call byte 1 type 1, Z points to low byte of ch0
+	;; Call byte 2 type 0, Z points to low byte of ch1
 	;;
 	;; Current values stored in big endian byte format.
 	;;
 	;; Track byte type in one register, channel index in another, drop
 	;; byte counter. Start with highest channel.
-
-	cp	REG_I_SPI_BYTE_TYPE,	0
+	clr	REG_I_SCRATCH_R0
+	cp	REG_I_SPI_BYTE_TYPE,	r0
 	brne	nextByteTypeNot0
 
 	ld	REG_I_FIRST_BYTE,	Z+
-
-	lsl	REG_I_FIRST_BYTE		; lsl = logical shift left
-	lsl	REG_I_FIRST_BYTE
-	lsl	REG_I_FIRST_BYTE
-	lsl	REG_I_FIRST_BYTE
-	
-	ld	REG_I_SECOND_BYTE,	Z+
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	or	REG_I_FIRST_BYTE,	REG_I_SECOND_BYTE
 
 	;; next byte type will be 2
 	ldi	REG_I_SECOND_BYTE,	2
@@ -181,13 +172,20 @@ spiSendNext:
 	rjmp	sendByte
 
 nextByteTypeNot0:
-	cp	REG_I_SPI_BYTE_TYPE,	1
+	inc	REG_I_SCRATCH_R0 ; was 0 above, is now 1
+	cp	REG_I_SPI_BYTE_TYPE,	REG_I_SCRATCH_R0
+	
 	brne	nextByteTypeIs2
 	;; Byte type is 1, Z points to low byte. was r22
 	ld	REG_I_FIRST_BYTE,	Z+
-	;; Z now points to low byte
-	andi	REG_I_FIRST_BYTE,	0xf0
-	ld	REG_I_SECOND_BYTE,	Z
+	;; Z now points to high byte of next channel
+	;; 
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+
+	ld	REG_I_SECOND_BYTE,	Z+
 
 	lsr	REG_I_SECOND_BYTE
 	lsr	REG_I_SECOND_BYTE
@@ -200,14 +198,14 @@ nextByteTypeNot0:
 	rjmp	sendByte	; one way of saying "goto" (uncondit. branch)
 
 nextByteTypeIs2:
-	ld	REG_I_FIRST_BYTE,	Z+
+	ld	REG_I_FIRST_BYTE,	Z+ ; high nybble of ch0 in low nybble
 
 	lsl	REG_I_FIRST_BYTE
 	lsl	REG_I_FIRST_BYTE
 	lsl	REG_I_FIRST_BYTE
 	lsl	REG_I_FIRST_BYTE
 
-	ld	REG_I_SECOND_BYTE,	Z+
+	ld	REG_I_SECOND_BYTE,	Z ; second nybble of ch0 in high nybble
 
 	lsr	REG_I_SECOND_BYTE
 	lsr	REG_I_SECOND_BYTE
@@ -236,10 +234,16 @@ spiReturn:
 ;;;
 TLC_spiTimerInterrupt:
 	;; save status byte
-	in	REG_I_SCRATCH_R0, 0x3f
+	in	REG_I_SCRATCH_R0, SREG
 	push	REG_I_SCRATCH_R0
 	push	XL
 	push	XH
+
+	;;
+	;; Check if the system is sending serial data, if so return immediately
+	;; 
+	tst	REG_I_SPI_BYTE_INDEX
+	brne	returnFromInterrupt
 	
 	;; Check if any diffs are not zero
 	;; X = r26:r27 current value
@@ -318,7 +322,9 @@ startSending:
 	ldi	ZL,	lo8(currentChannelValues)
 	ldi	ZH,	hi8(currentChannelValues)
 
-	ldi	REG_I_CHANNEL_INDEX,	16 * 2 * NUMBER_TLC_CHIPS 
+	;; REG_I_SPI_BYTE_INDEX counts sent bytes. 16 channel values are
+	;; packed in 24 bytes.
+	ldi	REG_I_CHANNEL_INDEX,	24 * NUMBER_TLC_CHIPS 
 	mov	REG_I_SPI_BYTE_INDEX,	REG_I_CHANNEL_INDEX
 
 	clr	REG_I_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
