@@ -165,6 +165,20 @@ spiSendNext:
 
 	ld	REG_I_FIRST_BYTE,	Z+
 
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+
+	ld	REG_I_SECOND_BYTE,	Z
+
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+
+	or	REG_I_FIRST_BYTE, REG_I_SECOND_BYTE
+	
 	;; next byte type will be 2
 	ldi	REG_I_SECOND_BYTE,	2
 	mov	REG_I_SPI_BYTE_TYPE,	REG_I_SECOND_BYTE
@@ -330,8 +344,22 @@ startSending:
 	clr	REG_I_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
 	inc	REG_I_SPI_BYTE_TYPE	; to 0 and then inc, due to reg limits
 	
-	ld	REG_I_SCRATCH_R0,	Z+
-	out	SPDR,	REG_I_SCRATCH_R0	; Initiates transmission
+	ld	REG_I_FIRST_BYTE,	Z+ ; Hi byte of current value
+
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+	lsl	REG_I_FIRST_BYTE
+
+	ld	REG_I_SECOND_BYTE,	Z
+
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+	lsr	REG_I_SECOND_BYTE
+
+	or	REG_I_FIRST_BYTE, REG_I_SECOND_BYTE
+	out	SPDR,	REG_I_FIRST_BYTE	; Initiates transmission
 
 returnFromInterrupt:
 	pop	XH

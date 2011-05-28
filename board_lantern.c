@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 	pthread_t run;
 	pthread_create(&run, NULL, avr_run_thread, NULL);
 
-	sleep( 1 ); // wait 5 seconds, then exit.
+	sleep( 5 ); // wait 5 seconds, then exit.
 
 	avr_vcd_stop(&vcd_file);
 
