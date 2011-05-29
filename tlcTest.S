@@ -53,8 +53,9 @@
 ;; TICKS_PER_STEP is the number of timer0 ticks per TLC test
 ;; MINUTES_PER_STEP is defined in the relevant config.h file
 ;; 16000000 / (1024 * 255) timer ticks per second * 60 * 60
-.equ	SECONDS_PER_TEST, 2
-.equ	TICKS_PER_STEP, (16000000 * SECONDS_PER_TEST) / (1024 * 255)
+;; For some reaseon, doesn't work properly with TSECONDS 10 or lower.
+.equ	TSECONDS_PER_TEST, 12
+.equ	TICKS_PER_STEP, (16000000 * TSECONDS_PER_TEST) / (1024 * 10 * 255)
 
 .text
 
@@ -97,35 +98,75 @@ init:
 	sei			; Enable interrupts
 
 	;; Turn on channel 0 to full intensity
-	ldi	r16,	0
+	;; Experiments: channel 0 doesn't seem to light anything
+	;; channel 1 lights channel 14, not full intensity
+	;; channel 2 lights channel 13 at full intensity
+	;; channel 3 lights channel 12 at low intensity
+	;; channel 4 lighs nothing?
+	;; channel 5 lights channel 10 at low
+	;; channel 6 lights channel 9 at full intensity
+	;; channel 7 lights channel 8 at low
+	;; channel 8 lights nothing
+	;; channel 9 lights channel 6 at low
+	;; channel 10 lights nothing
+	;; channel 11 lights nothing
+	;; channel 12 lights nothing
+	;; channel 13 lights nothing
+	;; channel 14 lights channel 1 at high
+	;; channel 15 lights channel 0 at low
+	;;
+	;; Second round of experiments:
+	;; channel 0 lights nothing
+	;; channel 1 lights channel 14 and channel 0 weak
+	;; channel 2 lights channel 13 brighter and channel 0 weak
+	;; channel 3 lights only channel 0 weak
+	;; channel 4 lights nothing
+	;; channel 5 lights channel 10
+	;; channel 6 lights channel 9 brighter
+	;; channel 15 lights channel 0
+	;; 
+	;; Third round of tests:
+	;; channel 0 lights nothing
+	;; channel 1-3 lights channel 1-3
+	;; channel 4 lights nothing
+	;; channel 5-7 lights channel 5-7
+	;; channel 8 lights nothing
+	;; channel 9-
+/*	ldi	r16,	15
 	mov	REG_TLC_CHANNEL_NUMBER, r16
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0b00001111
 	call	TLC_setChannelTargetIntensity
 
 	;; Turn on channel 1 to full intensity
-	ldi	r16,	1
+	ldi	r16,	4
 	mov	REG_TLC_CHANNEL_NUMBER, r16
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0b00001111
 	call	TLC_setChannelTargetIntensity
 
 	;; Turn on channel 14 to full intensity
-	ldi	r16,	14
+	ldi	r16,	5
 	mov	REG_TLC_CHANNEL_NUMBER, r16
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0b00001111
 	call	TLC_setChannelTargetIntensity
 
 	;; Turn on channel 1 to full intensity
-	ldi	r16,	15
+	ldi	r16,	4
 	mov	REG_TLC_CHANNEL_NUMBER, r16
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0b00001111
 	call	TLC_setChannelTargetIntensity
 
+	;; Turn on channel 1 to full intensity
+	ldi	r16,	5
+	mov	REG_TLC_CHANNEL_NUMBER, r16
+	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
+	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0b00001111
+	call	TLC_setChannelTargetIntensity
+*/
 loop:
-	rjmp	loop		; For debugging
 	; Mac: Idle Sleep ??? isn't it ADC noise reduction ???
 	; Erl: No. The lowest bit is SE (Sleep enable) the three bits above that
 	;      are 0, which is idle sleep mode
@@ -142,7 +183,7 @@ doneSetting:
 	cpi	REG_TICK_COUNTER_LOW,	lo8( TICKS_PER_STEP )	; compare with immediate
 	cpc	REG_TICK_COUNTER_HIGH,	r16			; compare with carry
 	sei
-	brlo	loop
+	brsh	loop
 
 	cli
 	subi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP )	; subtract immediate
@@ -156,8 +197,9 @@ doneSetting:
 	;; Test 0 - 16 is turning the corresponding LED on at full intensity
 	;; Test 32 - 63 is fading LED 1 up from 0 to full intensity over one
 	;; minute
-	;; 
-	andi	REG_TEST_COUNTER, 0b11110000 ; test if lower than 16
+	;;
+	mov	r16,	REG_TEST_COUNTER
+	andi	r16, 0b11110000 ; test if lower than 16
 	brne	testAfter15
 
 	mov	REG_TLC_CHANNEL_NUMBER, REG_TEST_COUNTER
@@ -166,16 +208,21 @@ doneSetting:
 	call	TLC_setChannelTargetIntensity
 
 	cpi	REG_TEST_COUNTER, 0
-	breq	isFirstLED
+	brne	notFirstLED
 
+isFirstLED:
+	ldi	r16,	15
+	mov	REG_TLC_CHANNEL_NUMBER, r15
+	rjmp	setChannelNumber
+notFirstLED:	
 	;; If not first LED, turn off the previous LED
 	mov	REG_TLC_CHANNEL_NUMBER, REG_TEST_COUNTER
 	dec	REG_TLC_CHANNEL_NUMBER
+setChannelNumber:	
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0x00
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x00
 	call	TLC_setChannelTargetIntensity
 	
-isFirstLED:
 	inc	REG_TEST_COUNTER
 	rjmp loop
 	
