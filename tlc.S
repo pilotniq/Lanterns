@@ -151,7 +151,7 @@ spiSendNext:
 	;;
 	;; Repeat
 	;;
-	;; Call Byte 0 type 2, Z points to high byte of ch0
+	;; Call Byte 0 type 2, Z points to high byte of ch0, send nybble
 	;; Call byte 1 type 1, Z points to low byte of ch0
 	;; Call byte 2 type 0, Z points to low byte of ch1
 	;;
@@ -165,20 +165,6 @@ spiSendNext:
 
 	ld	REG_I_FIRST_BYTE,	Z+
 
-	lsl	REG_I_FIRST_BYTE
-	lsl	REG_I_FIRST_BYTE
-	lsl	REG_I_FIRST_BYTE
-	lsl	REG_I_FIRST_BYTE
-
-	ld	REG_I_SECOND_BYTE,	Z
-
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-
-	or	REG_I_FIRST_BYTE, REG_I_SECOND_BYTE
-	
 	;; next byte type will be 2
 	ldi	REG_I_SECOND_BYTE,	2
 	mov	REG_I_SPI_BYTE_TYPE,	REG_I_SECOND_BYTE
@@ -200,11 +186,6 @@ nextByteTypeNot0:
 	lsl	REG_I_FIRST_BYTE
 
 	ld	REG_I_SECOND_BYTE,	Z+
-
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
-	lsr	REG_I_SECOND_BYTE
 
 	or	REG_I_FIRST_BYTE,	REG_I_SECOND_BYTE
 	dec	REG_I_SPI_BYTE_TYPE
