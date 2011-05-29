@@ -88,8 +88,8 @@ init:
 	ldi 	HOURS,		0	; hour
 
 	;; Initialize timer tick counter
-	ldi	r24, 	0
-	ldi 	r25, 	0
+	ldi	REG_TICK_COUNTER_LOW, 	0
+	ldi 	REG_TICK_COUNTER_HIGH, 	0
 
 	;; Set up timer 0 with 1024 prescaler
 	clr	r16
@@ -120,15 +120,15 @@ doneSetting:
 	;; 18750 == 0x493e times per 5 minutes
 	ldi	r16,	hi8( TICKS_PER_STEP )
 	cli			; make sure r24 doesn't change while comparing
-	cpi	r24,	lo8( TICKS_PER_STEP )	; compare with immediate
-	cpc	r25,	r16			; compare with carry
+	cpi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP ) ; compare with immediate
+	cpc	REG_TICK_COUNTER_HIGH, r16		; compare with carry
 	sei
-	brmi	noNewTime		; branch if minus
+	brsh	noNewTime		; branch if minus
 
 	inc	MINS_PAST		; 5 minutes past the hour
 	cli
-	subi	r24, lo8( TICKS_PER_STEP )	; subtract immediate
-	sbci	r25, hi8( TICKS_PER_STEP )	; subtract immediate with carry
+	subi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP )	; subtract immediate
+	sbci	REG_TICK_COUNTER_HIGH, hi8( TICKS_PER_STEP ) ; subtract immediate with carry
 	sei
 	cpi	MINS_PAST, STEPS_PER_HOUR
 	brlo	noNewHour		; branch if lower
@@ -160,8 +160,12 @@ timerInterrupt:
 	in	r0, 0x3f
 	push	r0
 
+	clr	r0
+	inc	r0
 	;; Incremement time counter (actual freq = 62.5Hz
-	adiw 	r24, 1
+	add	REG_TICK_COUNTER_LOW, r0
+	clr	r0
+	adc	REG_TICK_COUNTER_HIGH, r0
 
 doneSetting2:
 	;;  restore status register
