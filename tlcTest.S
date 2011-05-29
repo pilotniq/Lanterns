@@ -212,7 +212,7 @@ doneSetting:
 
 isFirstLED:
 	ldi	r16,	15
-	mov	REG_TLC_CHANNEL_NUMBER, r15
+	mov	REG_TLC_CHANNEL_NUMBER, r16
 	rjmp	setChannelNumber
 notFirstLED:	
 	;; If not first LED, turn off the previous LED
