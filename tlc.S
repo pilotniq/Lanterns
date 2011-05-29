@@ -79,13 +79,15 @@ TLC_init:
 	ldi	r16,	0b00000010
 	sts	TIMSK2, r16
 
-	;; Reset the GS data - ??? what's special with r3 ???
+	;; Reset the GS data
 	ldi	r16,		2
 	mov	HAVE_NEW_DATA,	r16	; we want two updates of gs data
 
 	;; then just blanks
-	cbi	BLANK_PORT, BLANK_PIN
+/*	cbi	BLANK_PORT, BLANK_PIN */
 
+	;; initialize current values to 1 and target values to 0. Will cause
+	;; initial refresh of all values to 0.
 	;; Must initialize current and target to 0 here, unless RAM is 0
 	;; by default
 
@@ -94,10 +96,13 @@ TLC_init:
 	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
 	ldi	r19,	0
 	
-initCurrentValuesLoop:	
+initCurrentValuesLoop:
 	dec	r16
 	breq	doneInitCurrentValues
 
+	ldi	r19,	0	; High word to 0
+	st	Z+,	r19
+	ldi	r19,	1	; Low word to 1
 	st	Z+,	r19
 	rjmp	initCurrentValuesLoop
 
@@ -105,7 +110,7 @@ doneInitCurrentValues:
 	ldi	ZH,	hi8( targetChannelValues )
 	ldi	ZL,	lo8( targetChannelValues )
 	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
-
+	ldi	r19,	0
 initTargetValuesLoop:	
 	dec	r16
 	breq	doneInitTargetValues
