@@ -142,6 +142,7 @@ doneSetting:
 	brlo	noNewHour		; branch if lower
 
 	inc 	HOURS			; increment hour count
+	clr	MINS_PAST
 	cpi	HOURS, HOURS_PER_DAY
 	brlo	noNewHour
 	ldi 	HOURS, 0
@@ -159,8 +160,6 @@ noNewHour:
 	;; call function to set all minute strings to intensity
 	;;
 	
-isItTenPast:
-
 noNewTime:
 	/* Check buttons */
 	/* Check LDR, adjust PWM */

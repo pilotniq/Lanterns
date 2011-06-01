@@ -206,6 +206,20 @@ keepHour:
 	;;
 	;; LSB in each word is for string 3, bit 10 for string d
 minuteStringData:
+	.word	0x0000
+	.word	0x0001
+	.word	0x0003
+	.word	0x0007
+	.word	0x000f
+	.word	0x001f
+	.word	0x002f
+	.word	0x003f
+	.word	0x007f
+	.word	0x00ff
+	.word	0x01ff
+	.word	0x03ff
+	
+	/*
 	.word	0x0000		   ; on the hour
 	.word	0b0000000110000100 ; five past the hour (fem över) 0x184
 	.word	0b0000000110001000 ; ten past the hour  (tio över)
@@ -218,9 +232,24 @@ minuteStringData:
 	.word   0b0000000111000000 ; 45 minutes past (kvart i)
 	.word	0b0000000001001000 ; 50 minutes past (tio i)
 	.word   0b0000000001000100 ; 55 minutes past (fem i)
-
+*/
 	;; There are 16 strings related to hours
 hourStringData:
+	.word   0x0001
+	.word   0x0002
+	.word   0x0004
+	.word   0x0008
+	.word   0x0010
+	.word   0x0020
+	.word   0x0040
+	.word   0x0080
+	.word   0x0100
+	.word   0x0200
+	.word   0x0400
+	.word   0x0800
+	
+	/*
+	
 	.word	0b0110000000000000 ; 12
 	.word	0b0000000000000010 ;  1
 	.word	0b0000000000000001 ;  2
@@ -233,5 +262,6 @@ hourStringData:
 	.word	0b1000000000000000 ;  9
 	.word	0b0000000100000000 ; 10
 	.word	0b0000110000000000 ; 11
+	*/
 .end
 	
