@@ -133,7 +133,7 @@ static void * avr_run_thread(void * oaram)
 int main(int argc, char *argv[])
 {
 	elf_firmware_t f;
-	const char * fname =  "tlcTest";
+	const char * fname =  "wordClock-erl";
 	char path[256];
 
 //	sprintf(path, "%s/%s", dirname(argv[0]), fname);
@@ -238,7 +238,7 @@ int main(int argc, char *argv[])
 	pthread_t run;
 	pthread_create(&run, NULL, avr_run_thread, NULL);
 
-	sleep( 5 ); // wait 5 seconds, then exit.
+	sleep( 60 ); // wait 5 seconds, then exit.
 
 	avr_vcd_stop(&vcd_file);
 

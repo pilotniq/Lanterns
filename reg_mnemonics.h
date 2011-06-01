@@ -22,6 +22,10 @@
 #define MINS_PAST r17
 #define HOURS r18
 
+#define REG_I_G_SPI_POINTER r11
+#define REG_I_G_SPI_POINTER_LOW r11
+#define REG_I_G_SPI_POINTER_HIGH r12
+
 /* 62.5Hz time counter */
 #define REG_TICK_COUNTER	r20
 #define REG_TICK_COUNTER_LOW	r20

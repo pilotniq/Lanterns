@@ -6,12 +6,14 @@
 ;;   r0, r7, r8, r9 interrupt time scratch
 ;;   r2 = SPI Channel index
 ;;   r6 = SPI Byte type (0-2)
+;;   r11:r12 = SPI Pointer
+;; 
 ;;   r21, r22 scratch for interrupt handling
 ;;
 ;;   r24:r25	Scratch for interrupt handling
 ;;   r26:r27 = X Used interrupt time to index current values (but pushed)
 ;;   r28:r29 = Y Used interrupt time to index target values
-;;   r30:r31 = Z Used in SPI to point into current
+;;   r30:r31 = Z Used in SPI to point into current (put pushed)
 ;; ****************************************************************************
 
 
@@ -122,7 +124,12 @@ TLC_spiInterrupt:
 	push	REG_I_SCRATCH_R0	; push status register = r0
 	push	XL			; push X register lo byte
 	push	XH			; push X register hi byte
+	push	ZL
+	push	ZH
 
+	mov	ZL,	REG_I_G_SPI_POINTER_LOW
+	mov	ZH,	REG_I_G_SPI_POINTER_HIGH
+	
 	;; Move on to the next TLC channel
 	dec	REG_I_G_SPI_BYTE_INDEX
 	brne	spiSendNext		; done!
@@ -213,10 +220,16 @@ sendByte:
 	out	SPDR,	REG_I_FIRST_BYTE	; SPDR = SPI data register
 
 spiReturn:
+	mov	REG_I_G_SPI_POINTER_LOW, ZL
+	mov	REG_I_G_SPI_POINTER_HIGH, ZH
+
 	;;  restore status register
+	pop	ZH
+	pop	ZL
 	pop	XH
 	pop	XL
 	pop	REG_I_SCRATCH_R0
+
 	out	SREG, 	REG_I_SCRATCH_R0		; reset status register
 
 	reti				; return from interrupt
@@ -231,7 +244,12 @@ TLC_spiTimerInterrupt:
 	push	REG_I_SCRATCH_R0
 	push	XL
 	push	XH
-
+	push 	ZL
+	push	ZH
+	
+	mov	ZL, REG_I_G_SPI_POINTER_LOW
+	mov	ZH, REG_I_G_SPI_POINTER_HIGH
+	
 	;;
 	;; Check if the system is sending serial data, if so return immediately
 	;; 
@@ -339,6 +357,11 @@ startSending:
 	out	SPDR,	REG_I_FIRST_BYTE	; Initiates transmission
 
 returnFromInterrupt:
+	mov	REG_I_G_SPI_POINTER_LOW, ZL
+	mov	REG_I_G_SPI_POINTER_HIGH, ZH
+	
+	pop	ZH
+	pop	ZL
 	pop	XH
 	pop	XL
 	;;  restore status register
@@ -351,21 +374,28 @@ returnFromInterrupt:
 ;;; Actual API
 ;;;
 ;;; Parameters: channel number in r10, intensity in r11:r12
-;;; Uses r10. Modifies REG_TLC_CHANNEL_NUMBER ! 
+;;; Uses r10.
 ;;;
 TLC_setChannelTargetIntensity:
 	.global TLC_setChannelTargetIntensity
 
+	push	REG_SCRATCH_4
+	push	REG_TLC_CHANNEL_NUMBER
+	
 	ldi	XL,	lo8( targetChannelValues )
 	ldi	XH,	hi8( targetChannelValues )
 
 	lsl	REG_TLC_CHANNEL_NUMBER
 	add	XL,	REG_TLC_CHANNEL_NUMBER
-	adc	XH,	0
+	clr	REG_SCRATCH_4
+	adc	XH,	REG_SCRATCH_4
 
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
 
+	pop	REG_TLC_CHANNEL_NUMBER
+	pop	REG_SCRATCH_4
+	
 	ret
 
 	.data

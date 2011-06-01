@@ -55,8 +55,8 @@
 ;; one minute.
 ;; MINUTES_PER_STEP is defined in the relevant config.h file
 ;; 16000000 / (1024 * 255) timer ticks per second * 60 * 60
-.equ	TICKS_PER_STEP, (16000000 * 60 * MINUTES_PER_STEP) / (1024 * 255)
-/* .equ	TICKS_PER_STEP, (16000000 * 12) / (1024 * 10 * 255) */
+/* .equ	TICKS_PER_STEP, (16000000 * 60 * MINUTES_PER_STEP) / (1024 * 255) */
+.equ	TICKS_PER_STEP, (16000000 * 12) / (1024 * 10 * 255)
 .equ	STEPS_PER_HOUR, (60 / MINUTES_PER_STEP)
 
 .text
@@ -95,6 +95,15 @@ init:
 	out	TCCR0B, REG_SCRATCH_4	; Select prescaler 1024, turn on
 	ldi	REG_SCRATCH_4,	1
 	sts	TIMSK0, REG_SCRATCH_4	; Enable interrupt on overflow (TOIE0 bit)
+	;; TODO:
+	;; We should probably read the LDR before starting the main loop
+	;; to set the initial LED intensity.
+	;;
+	;; For now we'll set it to maximum intensity
+	ldi	REG_SCRATCH_4, 0xff
+	mov	REG_CHANNEL_INTENSITY_LOW, REG_SCRATCH_4
+	ldi	REG_SCRATCH_4, 0x0f
+	mov	REG_CHANNEL_INTENSITY_HIGH, REG_SCRATCH_4
 
 	call	clockFace_init
 	
@@ -105,16 +114,6 @@ init:
 	/* out PORTB, r16	*/	/* Sets portB outputs to 0? */
 	/* out PORTD, r16	*/ /* Sets portD outputs to 0? */
 
-	;; TODO:
-	;; We should probably read the LDR before starting the main loop
-	;; to set the initial LED intensity.
-	;;
-	;; For now we'll set it to maximum intensity
-	ldi	REG_SCRATCH_4, 0xff
-	mov	REG_CHANNEL_INTENSITY_LOW, REG_SCRATCH_4
-	and	REG_SCRATCH_4, 0x0f
-	mov	REG_CHANNEL_INTENSITY_HIGH, REG_SCRATCH_4
-	
 loop:
 	; Mac: Idle Sleep ??? isn't it ADC noise reduction ???
 	; Erl: No. The lowest bit is SE (Sleep enable) the three bits above that

@@ -13,12 +13,12 @@ simavr = ../simavr
 IPATH = -I${simavr}/include -I${simavr}/simavr/sim
 
 LDFLAGS=${simavr}/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
-CFLAGS=-mmcu=atmega168
-ASFLAGS=-mmcu=atmega168
+CFLAGS=-mmcu=atmega168 -g
+ASFLAGS=-mmcu=atmega168 -g
 #include ${simavr}/Makefile.common
 
 board_lantern: board_lantern.c
-	gcc -std=c99 $(CFLAGS) $(IPATH) board_lantern.c -o board_lantern $(LDFLAGS)
+	gcc -std=c99 $(IPATH) board_lantern.c -o board_lantern $(LDFLAGS)
 
 main.o:	main.S
 tlc.o:	tlc.S config.h

@@ -84,8 +84,6 @@ clockFace_setStrings:
 	pop	ZH
 	pop	ZL
 
-	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
-
 	;;
 	;; Set desired on intensity
 	;; 
@@ -105,7 +103,7 @@ clockFace_setStrings:
 	ldi	REG_SCRATCH_4, 3
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 	
-	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
+	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
 
 	call	clockFace_setOnChannels
 	;;
@@ -209,7 +207,7 @@ keepHour:
 	;; LSB in each word is for string 3, bit 10 for string d
 minuteStringData:
 	.word	0x0000		   ; on the hour
-	.word	0b0000000110000100 ; five past the hour (fem över)
+	.word	0b0000000110000100 ; five past the hour (fem över) 0x184
 	.word	0b0000000110001000 ; ten past the hour  (tio över)
 	.word	0b0000000110110000 ; quarter past the hour (kvart över)
 	.word	0b0000000110000011 ; twenty past the hour  (tjugo över)
@@ -235,6 +233,5 @@ hourStringData:
 	.word	0b1000000000000000 ;  9
 	.word	0b0000000100000000 ; 10
 	.word	0b0000110000000000 ; 11
-
 .end
 	
