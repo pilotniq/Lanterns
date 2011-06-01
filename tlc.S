@@ -54,37 +54,30 @@ TLC_init:
 	sbi	BLANK_PORT,	BLANK_PIN
 
 	;; PB4 = MISO is input, others output
-	ldi	r16,	0b11101111	; ldi = load immediate
-	out	DDRB,	r16		; Set port B to all outputs, except MISO
-	ser	r16			; Sets r16 to 0xff (ser = set to 0xFF)
-	out	DDRD,	r16		; Set port D to all outputs
+	ldi	REG_SCRATCH_4,	0b11101111	; ldi = load immediate
+	out	DDRB,	REG_SCRATCH_4		; Set port B to all outputs, except MISO
+	ser	REG_SCRATCH_4			; Sets REG_SCRATCH_4 to 0xff (ser = set to 0xFF)
+	out	DDRD,	REG_SCRATCH_4		; Set port D to all outputs
 
 	;; Enable SPI, set clock rate fck/2, idle low, data on rise
 	;; The setting of the clock is bits 0,1 of SPCR and bit 0 of SPSR
-	ldi	r16,	0b11010000
-	out	SPCR,	r16		; SPCR = SPI control register
+	ldi	REG_SCRATCH_4,	0b11010000
+	out	SPCR,	REG_SCRATCH_4		; SPCR = SPI control register
 	out	SPSR,	0b00000001	; SPSR = SPI status register
 
 	;; Setup timer A for SPI
-	ldi	r16, 	0b11000010	; Set OC2A on match, No OC2, CTC Mode
-	sts	TCCR2A, r16		; TCCR = Timer/counter control register
-	ldi	r16, 	3		; Set comparison value for timer A
-	sts	OCR2A, r16		; OCR = Output compare register
+	ldi	REG_SCRATCH_4, 	0b11000010	; Set OC2A on match, No OC2, CTC Mode
+	sts	TCCR2A, REG_SCRATCH_4		; TCCR = Timer/counter control register
+	ldi	REG_SCRATCH_4, 	3		; Set comparison value for timer A
+	sts	OCR2A, REG_SCRATCH_4		; OCR = Output compare register
 
 	;; Setup timer B
-	ldi	r16, 	0b00000111
-	sts	TCCR2B, r16		; Select prescaler 1024, turn on
+	ldi	REG_SCRATCH_4, 	0b00000111
+	sts	TCCR2B, REG_SCRATCH_4		; Select prescaler 1024, turn on
 
 	;; Enable interrupt on compare A (OCIE2A bit)
-	ldi	r16,	0b00000010
-	sts	TIMSK2, r16
-
-	;; Reset the GS data
-	ldi	r16,		2
-	mov	HAVE_NEW_DATA,	r16	; we want two updates of gs data
-
-	;; then just blanks
-/*	cbi	BLANK_PORT, BLANK_PIN */
+	ldi	REG_SCRATCH_4,	0b00000010
+	sts	TIMSK2, REG_SCRATCH_4
 
 	;; initialize current values to 1 and target values to 0. Will cause
 	;; initial refresh of all values to 0.
@@ -93,11 +86,11 @@ TLC_init:
 
 	ldi	ZH,	hi8( currentChannelValues )
 	ldi	ZL,	lo8( currentChannelValues )
-	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
+	ldi	REG_SCRATCH_4,	2 * 16 * NUMBER_TLC_CHIPS
 	ldi	r19,	0
 	
 initCurrentValuesLoop:
-	dec	r16
+	dec	REG_SCRATCH_4
 	breq	doneInitCurrentValues
 
 	ldi	r19,	0	; High word to 0
@@ -109,17 +102,17 @@ initCurrentValuesLoop:
 doneInitCurrentValues:
 	ldi	ZH,	hi8( targetChannelValues )
 	ldi	ZL,	lo8( targetChannelValues )
-	ldi	r16,	2 * 16 * NUMBER_TLC_CHIPS
+	ldi	REG_SCRATCH_4,	2 * 16 * NUMBER_TLC_CHIPS
 	ldi	r19,	0
 initTargetValuesLoop:	
-	dec	r16
+	dec	REG_SCRATCH_4
 	breq	doneInitTargetValues
 
 	st	Z+,	r19
 	rjmp	initTargetValuesLoop
 
 doneInitTargetValues:	
-	clr	REG_I_SPI_BYTE_INDEX
+	clr	REG_I_G_SPI_BYTE_INDEX
 
 	ret				; return from subrutine
 
@@ -131,7 +124,7 @@ TLC_spiInterrupt:
 	push	XH			; push X register hi byte
 
 	;; Move on to the next TLC channel
-	dec	REG_I_SPI_BYTE_INDEX
+	dec	REG_I_G_SPI_BYTE_INDEX
 	brne	spiSendNext		; done!
 
 	;; Sent last byte. Now make blank high to stop PWM, pulse XLAT,
@@ -148,7 +141,7 @@ TLC_spiInterrupt:
 	rjmp	spiReturn
 
 spiSendNext:
-	;; REG_I_SPI_BYTE_INDEX contains index of byte to send.
+	;; REG_I_G_SPI_BYTE_INDEX contains index of byte to send.
 	;;
 	;; Byte 0: high byte of channel 0 intensity
 	;; Byte 1: low nybble of channel 0 intensity, high nybble of channel 1
@@ -242,7 +235,7 @@ TLC_spiTimerInterrupt:
 	;;
 	;; Check if the system is sending serial data, if so return immediately
 	;; 
-	tst	REG_I_SPI_BYTE_INDEX
+	tst	REG_I_G_SPI_BYTE_INDEX
 	brne	returnFromInterrupt
 	
 	;; Check if any diffs are not zero
@@ -317,15 +310,13 @@ allDiffsZero:
 	;; Executed at interrupt time
 	;;
 startSending:
-	dec	r3		; decrement counter of times to write
-
 	ldi	ZL,	lo8(currentChannelValues)
 	ldi	ZH,	hi8(currentChannelValues)
 
-	;; REG_I_SPI_BYTE_INDEX counts sent bytes. 16 channel values are
+	;; REG_I_G_SPI_BYTE_INDEX counts sent bytes. 16 channel values are
 	;; packed in 24 bytes.
 	ldi	REG_I_CHANNEL_INDEX,	24 * NUMBER_TLC_CHIPS 
-	mov	REG_I_SPI_BYTE_INDEX,	REG_I_CHANNEL_INDEX
+	mov	REG_I_G_SPI_BYTE_INDEX,	REG_I_CHANNEL_INDEX
 
 	clr	REG_I_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
 	inc	REG_I_SPI_BYTE_TYPE	; to 0 and then inc, due to reg limits

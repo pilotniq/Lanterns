@@ -38,8 +38,6 @@
 	;; 10-> 6, 9
 	;; 11-> 5, 9
 
-.equ	NUMBER_TLC_CHIPS,	1
-.global NUMBER_TLC_CHIPS
-
+.equ	NUMBER_TLC_CHIPS,	2
 .equ    MINUTES_PER_STEP, 5
 .equ    HOURS_PER_DAY, 12

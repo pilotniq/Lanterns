@@ -7,13 +7,21 @@
  * used in TLC_spiTimerInterrupt
  */
 #define REG_I_CHANGE_COUNTER r2
+/* Set in tlcInit, R/W in TLC_spiInterrupt */
+/* SPI byte index. Starts at max + 1, then decremented */
+#define REG_I_G_SPI_BYTE_INDEX r3
+/* REG_CHANNEL_INTENSITY_x contains the desired intensity for the current 
+   ambient light level */
+#define REG_CHANNEL_INTENSITY_LOW r4
+#define REG_CHANNEL_INTENSITY_HIGH r5
+#define REG_I_SPI_BYTE_TYPE r6
+#define REG_SCRATCH_1 r7
+#define REG_SCRATCH_2 r8
+#define REG_SCRATCH_3 r9
+#define REG_SCRATCH_4 r16
 #define MINS_PAST r17
 #define HOURS r18
-/* SPI byte index. Starts at max + 1, then decremented */
-#define REG_I_SPI_BYTE_INDEX r2
-#define REG_I_SPI_BYTE_TYPE r6
-/* New data to send over SPI */
-#define HAVE_NEW_DATA r3
+
 /* 62.5Hz time counter */
 #define REG_TICK_COUNTER	r20
 #define REG_TICK_COUNTER_LOW	r20

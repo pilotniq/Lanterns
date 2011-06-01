@@ -130,7 +130,7 @@ doneSetting:
 	;; minute
 	;;
 	mov	r16,	REG_TEST_COUNTER
-	andi	r16, 0b11110000 ; test if lower than 16
+	andi	r16, 0b11100000 ; test if lower than 16
 	brne	testAfter15
 
 	mov	REG_TLC_CHANNEL_NUMBER, REG_TEST_COUNTER
