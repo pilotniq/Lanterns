@@ -172,8 +172,6 @@ keepHour:
 	pop	ZH
 	pop	ZL
 
-	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
-
 	;;
 	;; Set desired on intensity
 	;; 
@@ -193,7 +191,7 @@ keepHour:
 	ldi	REG_SCRATCH_4, 8 ; Counter
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 
-	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
+	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
 
 	call	clockFace_setOnChannels
 	;;
