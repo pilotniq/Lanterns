@@ -4,9 +4,15 @@
 #define REG_I_SCRATCH_R0 r0
 #define REG_I_SCRATCH_R1 r1
 /*
- * used in TLC_spiTimerInterrupt
+ * used in TLC_spiTimerInterrupt, but saved
  */
 #define REG_I_CHANGE_COUNTER r2
+/*
+ * this variable is increased in timerInterrupt (62.5 Hz), and checked
+ * and decremented in the main loop to see if a tick has occurred
+ */
+#define REG_TICKED r2
+
 /* Set in tlcInit, R/W in TLC_spiInterrupt */
 /* SPI byte index. Starts at max + 1, then decremented */
 #define REG_I_G_SPI_BYTE_INDEX r3
@@ -14,7 +20,7 @@
    ambient light level */
 #define REG_CHANNEL_INTENSITY_LOW r4
 #define REG_CHANNEL_INTENSITY_HIGH r5
-#define REG_I_SPI_BYTE_TYPE r6
+#define REG_I_G_SPI_BYTE_TYPE r6
 #define REG_SCRATCH_1 r7
 #define REG_SCRATCH_2 r8
 #define REG_SCRATCH_3 r9
@@ -38,12 +44,21 @@
 #define REG_TLC_CHANNEL_INTENSITY_HIGH r23
 
 /* 
- * Used for loop in TLC_spiTimerInterrupt.
+ * Used for loop in TLC_spiTimerInterrupt, but pushed on entry
 */
 #define REG_I_CHANNEL_INDEX r19
 /*
+ * The input state of port C last time around
+ */
+#define REG_PREV_BUTTON_STATE r19
+
+/*
  * Used in TLC SPI Timer interrupt for storing current LED value
  * I in name stands for interrupt time variable
+ *
+ * TODO: Move a global variable currently stored in r0-r15 to r24.
+ * Use reg previously used for the global variable as interrupt scratch for
+ * saving sreg. Reserve r0,r1 for mul result or scratch. Free up these regs.
  */
 #define REG_I_LED_CURRENT_LOW r24
 #define REG_I_LED_CURRENT_HIGH r25
