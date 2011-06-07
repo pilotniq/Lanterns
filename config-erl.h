@@ -38,6 +38,11 @@
 	;; 10-> 6, 9
 	;; 11-> 5, 9
 
+#define TIME_STEP_BUTTONS 1
+
+.equ    BUTTON_PORT, PORTC
+.equ    BUTTON_PIN_INC_TIME, 1
+.equ    BUTTON_PIN_DEC_TIME, 2
 .equ	NUMBER_TLC_CHIPS,	2
 .equ    MINUTES_PER_STEP, 5
 .equ    HOURS_PER_DAY, 12
