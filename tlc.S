@@ -63,9 +63,11 @@ TLC_init:
 
 	;; Enable SPI, set clock rate fck/2, idle low, data on rise
 	;; The setting of the clock is bits 0,1 of SPCR and bit 0 of SPSR
-	ldi	REG_SCRATCH_4,	0b11010000
+	;; 	ldi	REG_SCRATCH_4,	0b11010000
+	ldi	REG_SCRATCH_4,	0b11010011
 	out	SPCR,	REG_SCRATCH_4		; SPCR = SPI control register
-	out	SPSR,	0b00000001	; SPSR = SPI status register
+	;; 	out	SPSR,	0b00000001	; SPSR = SPI status register
+	out	SPSR,	0b00000000	; SPSR = SPI status register
 
 	;; Setup timer A for SPI
 	ldi	REG_SCRATCH_4, 	0b11000010	; Set OC2A on match, No OC2, CTC Mode
@@ -165,20 +167,20 @@ spiSendNext:
 	;; Track byte type in one register, channel index in another, drop
 	;; byte counter. Start with highest channel.
 	clr	REG_I_SCRATCH_R0
-	cp	REG_I_SPI_BYTE_TYPE,	r0
+	cp	REG_I_G_SPI_BYTE_TYPE,	r0
 	brne	nextByteTypeNot0
 
 	ld	REG_I_FIRST_BYTE,	Z+
 
 	;; next byte type will be 2
 	ldi	REG_I_SECOND_BYTE,	2
-	mov	REG_I_SPI_BYTE_TYPE,	REG_I_SECOND_BYTE
+	mov	REG_I_G_SPI_BYTE_TYPE,	REG_I_SECOND_BYTE
 
 	rjmp	sendByte
 
 nextByteTypeNot0:
 	inc	REG_I_SCRATCH_R0 ; was 0 above, is now 1
-	cp	REG_I_SPI_BYTE_TYPE,	REG_I_SCRATCH_R0
+	cp	REG_I_G_SPI_BYTE_TYPE,	REG_I_SCRATCH_R0
 	
 	brne	nextByteTypeIs2
 	;; Byte type is 1, Z points to low byte. was r22
@@ -193,7 +195,7 @@ nextByteTypeNot0:
 	ld	REG_I_SECOND_BYTE,	Z+
 
 	or	REG_I_FIRST_BYTE,	REG_I_SECOND_BYTE
-	dec	REG_I_SPI_BYTE_TYPE
+	dec	REG_I_G_SPI_BYTE_TYPE
 
 	rjmp	sendByte	; one way of saying "goto" (uncondit. branch)
 
@@ -214,7 +216,7 @@ nextByteTypeIs2:
 
 	or	REG_I_FIRST_BYTE, REG_I_SECOND_BYTE
 
-	dec	REG_I_SPI_BYTE_TYPE
+	dec	REG_I_G_SPI_BYTE_TYPE
 
 sendByte:
 	out	SPDR,	REG_I_FIRST_BYTE	; SPDR = SPI data register
@@ -246,6 +248,8 @@ TLC_spiTimerInterrupt:
 	push	XH
 	push 	ZL
 	push	ZH
+	push	REG_I_CHANGE_COUNTER
+	push	REG_I_CHANNEL_INDEX
 	
 	mov	ZL, REG_I_G_SPI_POINTER_LOW
 	mov	ZH, REG_I_G_SPI_POINTER_HIGH
@@ -254,8 +258,15 @@ TLC_spiTimerInterrupt:
 	;; Check if the system is sending serial data, if so return immediately
 	;; 
 	tst	REG_I_G_SPI_BYTE_INDEX
-	brne	returnFromInterrupt
+	breq	notSendingData
+
+	;; Pulse blank
+	sbi	BLANK_PORT, BLANK_PIN
+	cbi	BLANK_PORT, BLANK_PIN
 	
+	rjmp	returnFromInterrupt
+
+notSendingData:	
 	;; Check if any diffs are not zero
 	;; X = r26:r27 current value
 	;; Y = r28:r29 target value
@@ -336,8 +347,8 @@ startSending:
 	ldi	REG_I_CHANNEL_INDEX,	24 * NUMBER_TLC_CHIPS 
 	mov	REG_I_G_SPI_BYTE_INDEX,	REG_I_CHANNEL_INDEX
 
-	clr	REG_I_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
-	inc	REG_I_SPI_BYTE_TYPE	; to 0 and then inc, due to reg limits
+	clr	REG_I_G_SPI_BYTE_TYPE	; Set byte type to 1 by first setting
+	inc	REG_I_G_SPI_BYTE_TYPE	; to 0 and then inc, due to reg limits
 	
 	ld	REG_I_FIRST_BYTE,	Z+ ; Hi byte of current value
 
@@ -359,7 +370,9 @@ startSending:
 returnFromInterrupt:
 	mov	REG_I_G_SPI_POINTER_LOW, ZL
 	mov	REG_I_G_SPI_POINTER_HIGH, ZH
-	
+
+	pop	REG_I_CHANNEL_INDEX
+	pop	REG_I_CHANGE_COUNTER
 	pop	ZH
 	pop	ZL
 	pop	XH
