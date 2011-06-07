@@ -4,6 +4,9 @@
 ;;
 ;; Registers
 ;;
+;; NOTE: TODO: MUL result is put in registers r0:r1, so we need to reallocate
+;; r0 and r1 so that they are not used without saving in interrupt handlers
+;; 
 ;; r0 = scratch used by interrupt processor, don't use!
 ;; r1 = SPI reading, used in interrupt
 ;; r2 = SPI counter
@@ -47,7 +50,7 @@
 ;; INCLUDES
 .include "m168.h"
 #include "reg_mnemonics.h"
-.include "config.h"
+#include "config.h"
 
 ;; CONSTANTS
 ;; TICKS_PER_STEP is the number of timer0 ticks per clock step.
@@ -123,31 +126,36 @@ loop:
 	sleep
 
 doneSetting:
+	;;
+	;; Check if tick count changed, otherwise loop. 
+	;;
+	ldi	REG_SCRATCH_4,	0
+	cp	REG_TICKED,	REG_SCRATCH_4
+	breq	loop
+
+	dec	REG_TICKED	; assume atomic
+	
 	;; Increment time counter if required
 	;; Time counter is in r24, increased 62.5 times per second ==
 	;; 18750 == 0x493e times per 5 minutes
 	ldi	REG_SCRATCH_4,	hi8( TICKS_PER_STEP )
-	cli			; make sure r24 doesn't change while comparing
+	;; CLI: make sure REG_TICK_COUNTER_HIGH, LOW don't change while comparing
+	cli			
 	cpi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP ) ; compare with immediate
 	cpc	REG_TICK_COUNTER_HIGH, REG_SCRATCH_4		; compare with carry
 	sei
 	brsh	noNewTime		; branch if minus
 
-	inc	MINS_PAST		; 5 minutes past the hour
+	;;
+	;; Subtract ticks from tick counter
+	;; 
 	cli
 	subi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP )	; subtract immediate
 	sbci	REG_TICK_COUNTER_HIGH, hi8( TICKS_PER_STEP ) ; subtract immediate with carry
 	sei
-	cpi	MINS_PAST, STEPS_PER_HOUR
-	brlo	noNewHour		; branch if lower
-
-	inc 	HOURS			; increment hour count
-	clr	MINS_PAST
-	cpi	HOURS, HOURS_PER_DAY
-	brlo	noNewHour
-	ldi 	HOURS, 0
-
-noNewHour:
+	
+	call	incTime
+	
 	;; Change time words if time changed
 	call	clockFace_setStrings
 	
@@ -161,10 +169,109 @@ noNewHour:
 	;;
 	
 noNewTime:
-	/* Check buttons */
+	;; Check buttons. All buttons are on port C
+	in	REG_SCRATCH_4, BUTTON_PORT
+	and	REG_SCRATCH_4, REG_PREV_BUTTON_STATE
+#if TIME_STEP_BUTTONS
+	sbrs	REG_SCRATCH_4, BUTTON_PIN_INC_TIME
+	rjmp	checkForDecTime
+
+	call	incTime
+
+timeChanged:
+	call	clockFace_setStrings
+	rjmp	doneButtons
+
+checkForDecTime:
+	sbrs	REG_SCRATCH_4, BUTTON_PIN_DEC_TIME
+	rjmp	doneButtons
+
+	call	decTime
+
+	rjmp	timeChanged
+#else	
+	sbrs	REG_SCRATCH_4, BUTTON_PIN_INC_HOUR ; Skip next if bit set
+	rjmp	checkForDecHour
+
+	;; Increase hour button pressed this time and last time around
+	;; = debounce
+	inc	HOURS
+	cpi	HOURS,	HOURS_PER_DAY
+	brne	noHourWrap
+
+	clr	HOURS
+
+noHourWrap:
+doButtonChange:	
+	call	clockFace_setStrings
+	rjmp	doneButtons
+
+checkForDecHour:
+	sbrs	REG_SCRATCH_4, BUTTON_PIN_DEC_HOUR ; Skip next if bit set
+	rjmp	checkForIncMinute
+
+	cpi	HOURS,	0
+	brne	noHourUnderflow
+
+	ldi	HOURS,	HOURS_PER_DAY - 1
+	rjmp	doButtonChange
+
+noHourUnderflow:
+	dec	HOURS
+	rjmp	doButtonChange
+
+	;; TODO: Mac, implement rest of your buttons here
+#endif
+	
+doneButtons:	
 	/* Check LDR, adjust PWM */
 	rjmp loop
+	
+;;;
+;;; Increment time by one minute, wrapping hours and minutes as appropriate
+;;;
+incTime:	
+	inc	MINS_PAST		; 5 minutes past the hour
+	cpi	MINS_PAST, STEPS_PER_HOUR
+	brlo	noNewHour		; branch if lower
 
+	inc 	HOURS			; increment hour count
+	clr	MINS_PAST
+	cpi	HOURS, HOURS_PER_DAY
+	brlo	noNewHour
+	ldi 	HOURS, 0
+
+noNewHour:
+	ret
+
+;;;
+;;; Decrement time by one minute step, wrapping hours and minutes as appropriate
+;;;
+decTime:
+	cpi	MINS_PAST,	0
+	brne	doDecMinutes
+
+	ldi	MINS_PAST,	MINUTES_PER_STEP - 1
+
+	cpi	HOURS,	0
+	brne	doDecHours
+
+	ldi	HOURS,	HOURS_PER_DAY - 1
+	rjmp	doneDecTime
+
+doDecHours:
+	dec	HOURS
+	rjmp	doneDecTime
+
+doDecMinutes:
+	dec	MINS_PAST
+
+doneDecTime:
+	ret
+	
+;;;
+;;; Called 62.5 timer per second to increment tick counter
+;;; 
 timerInterrupt:
 	/* save status byte */
 	in	r0, 0x3f
@@ -177,10 +284,12 @@ timerInterrupt:
 	clr	r0
 	adc	REG_TICK_COUNTER_HIGH, r0
 
+	inc	REG_TICKED
+	
 doneSetting2:
 	;;  restore status register
 	pop	r0
 	out	0x3f, r0
 	reti
-	
+
 .end
