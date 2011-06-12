@@ -2,6 +2,39 @@
 ;;; Code for Erland's Swedish Word Clock with 5 minute resolution, to set the
 ;;; proper LED strings on depending on the time.
 ;;;
+;; Channels: 31 = ÖV (över)
+;;           30 = HA (halv)
+;;; 	     29 = RT (kvart)        24, 25, 26, 21, 29, 31, 18, 16
+;;	     28 = TIO
+;;; 	     27 = GO (tjugo)
+;;; 	     26 = N ÄR (klockan är)
+;;; 	     25 = KLO (klockan är)
+;;; 	     24 = CKA (klockan är)
+;;; 	     23 = TJU (tjugo)
+;;;          22 = FEM
+;;; 	     21 = KVA
+;;;          20 = I
+;;;          19 = LV (halv)
+;;;          18 = ER (över)
+;;;          17 = ETT
+;;; 	     16 = TVÅ
+;;;          15 = LV (tolv)
+;;; 	     14 = SJU
+;;;          13 = VA (ELVA)
+;;;          12 = TIO (timme)
+;;;          11 = ÅT (åtta)
+;;;          10 = FEM (timme)
+;;;           9 = ?
+;;;           8 = ?
+;;;           7 = TA (åtta)
+;;;           6 = TRE
+;;;           5 = SEX
+;;;           4 = ?
+;;;           3 = TO (tolv)
+;;;           2 = NIO
+;;;           1 = ?
+;;;           0 = ?
+;;; 
 
 #import "reg_mnemonics.h"
 	
@@ -15,10 +48,12 @@ clockFace_init:
 	;; 
 	;; Get the desired intensity due to ambient light, use as parameter to
 	;; set TLC intensity
-	mov	REG_TLC_CHANNEL_INTENSITY_LOW, REG_CHANNEL_INTENSITY_LOW
+/*	mov	REG_TLC_CHANNEL_INTENSITY_LOW, REG_CHANNEL_INTENSITY_LOW
 	mov	REG_TLC_CHANNEL_INTENSITY_HIGH, REG_CHANNEL_INTENSITY_HIGH
 
-	clr	REG_TLC_CHANNEL_NUMBER
+	;; channels 24, 25, 26
+	ldi	REG_SCRATCH_4, 24
+	mov	REG_TLC_CHANNEL_NUMBER, REG_SCRATCH_4
 	call	TLC_setChannelTargetIntensity
 
 	inc	REG_TLC_CHANNEL_NUMBER
@@ -26,7 +61,7 @@ clockFace_init:
 	
 	inc	REG_TLC_CHANNEL_NUMBER
 	call	TLC_setChannelTargetIntensity
-	
+	*/
 	ret
 	
 clockFace_setStrings:
@@ -59,7 +94,7 @@ clockFace_setStrings:
 	clr	REG_TLC_CHANNEL_INTENSITY_LOW
 	clr	REG_TLC_CHANNEL_INTENSITY_HIGH
 
-	ldi	REG_SCRATCH_4, 3	; Channel number of first channel
+	ldi	REG_SCRATCH_4, 18	; Channel number of first channel
 	mov	REG_SCRATCH_2, REG_SCRATCH_4
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
@@ -69,9 +104,9 @@ clockFace_setStrings:
 	;; When we get here, the first 8 variable channels (3-10) which should
 	;; be off have been turned off
 	;;
-	;; Handle the remaining three minute channels
+	;; Handle the remaining six minute channels
 	;;
-	ldi	REG_SCRATCH_4, 3
+	ldi	REG_SCRATCH_4, 5	     ; should this be 26 (18+8)?
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
@@ -93,14 +128,14 @@ clockFace_setStrings:
 	ldi	REG_SCRATCH_4, 8 ; Counter
 	mov	REG_SCRATCH_3, REG_SCRATCH_4
 
-	ldi	REG_SCRATCH_4, 3
+	ldi	REG_SCRATCH_4, 18
 	mov	REG_SCRATCH_2, REG_SCRATCH_4 ; First channel
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
 
 	call	clockFace_setOnChannels
 
-	ldi	REG_SCRATCH_4, 3
+	ldi	REG_SCRATCH_4, 5
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
@@ -110,6 +145,7 @@ clockFace_setStrings:
 	;; When we get here, all minute channels should be set to their proper
 	;; target value. Do the same thing with the hour values
 	;;
+
 	;;
 	;; Load Z with program memory address of minute word
 	;;
@@ -150,7 +186,7 @@ keepHour:
 	ldi	REG_SCRATCH_4, 8
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter will be decremented
 	
-	ldi	REG_SCRATCH_4, 14 ; Channel number of first channel
+	ldi	REG_SCRATCH_4, 2 ; Channel number of first channel
 	mov	REG_SCRATCH_2, REG_SCRATCH_4 ; Channel number of first channel
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
@@ -181,7 +217,7 @@ keepHour:
 	ldi	REG_SCRATCH_4, 8 ; Counter
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 
-	ldi	REG_SCRATCH_4, 14 ; First channel
+	ldi	REG_SCRATCH_4, 2 ; First channel
 	mov	REG_SCRATCH_2, REG_SCRATCH_4 ; First channel
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
@@ -204,62 +240,36 @@ keepHour:
 	;;
 	;; LSB in each word is for string 3, bit 10 for string d
 minuteStringData:
-	.word	0x0000
-	.word	0x0001
-	.word	0x0003
-	.word	0x0007
-	.word	0x000f
-	.word	0x001f
-	.word	0x002f
-	.word	0x003f
-	.word	0x007f
-	.word	0x00ff
-	.word	0x01ff
-	.word	0x03ff
-	
-	/*
-	.word	0x0000		   ; on the hour
-	.word	0b0000000110000100 ; five past the hour (fem över) 0x184
-	.word	0b0000000110001000 ; ten past the hour  (tio över)
-	.word	0b0000000110110000 ; quarter past the hour (kvart över)
-	.word	0b0000000110000011 ; twenty past the hour  (tjugo över)
-	.word   0b0000011001000100 ; twenty five past the hour (fem i halv)
-	.word   0b0000011000000000 ; half past ("halv")
-	.word   0b0000011110000100 ; 35 minutes past (fem över halv)
-	.word   0b0000000001000011 ; 40 minutes past (tjugo i)
-	.word   0b0000000111000000 ; 45 minutes past (kvart i)
-	.word	0b0000000001001000 ; 50 minutes past (tio i)
-	.word   0b0000000001000100 ; 55 minutes past (fem i)
-*/
-	;; There are 16 strings related to hours
+;;; Minute strings are channels 18 and up
+	;;          33222222222211
+	;;          10987654321098
+	.word	0b0000000111000000 ; on the hour
+	.word	0b0010000111010001 ; five past the hour (fem över) 0x184
+	.word	0b0010010111000001 ; ten past the hour  (tio över)
+	.word	0b0010100111001001 ; quarter past the hour (kvart över)
+	.word	0b0010001111100001 ; twenty past the hour  (tjugo över)
+	.word   0b0001000111010110 ; twenty five past the hour (fem i halv)
+	.word   0b0001000111000010 ; half past ("halv")
+	.word   0b0011000111010011 ; 35 minutes past (fem över halv)
+	.word   0b0000001111100100 ; 40 minutes past (tjugo i)
+	.word   0b0000100111001100 ; 45 minutes past (kvart i)
+	.word	0b0000010111000100 ; 50 minutes past (tio i)
+	.word   0b0000000111010100 ; 55 minutes past (fem i)
+
+	;; There are 16 strings related to hours. Strings 2-17
 hourStringData:
-	.word   0x0001
-	.word   0x0002
-	.word   0x0004
-	.word   0x0008
-	.word   0x0010
-	.word   0x0020
-	.word   0x0040
-	.word   0x0080
-	.word   0x0100
-	.word   0x0200
-	.word   0x0400
-	.word   0x0800
-	
-	/*
-	
-	.word	0b0110000000000000 ; 12
-	.word	0b0000000000000010 ;  1
-	.word	0b0000000000000001 ;  2
-	.word	0b0000000010000000 ;  3
-	.word	0b0000000000001100 ;  4
-	.word	0b0000000000010000 ;  5
-	.word	0b0000001000000000 ;  6
-	.word	0b0001000000000000 ;  7
-	.word	0b0000000001100000 ;  8
-	.word	0b1000000000000000 ;  9
-	.word	0b0000000100000000 ; 10
-	.word	0b0000110000000000 ; 11
-	*/
+	;;        7654321098765432
+	.word   0b0010000000000010 ; Midnight = tolv
+	.word   0b1000000000000000 ; ett
+	.word   0b0100000000000000 ; två
+	.word   0b0000000000010000 ; tre
+	.word   0b0000000011000000 ; find fyra
+	.word   0b0000000100000000 ; fem
+	.word   0b0000000000001000 ; sex
+	.word   0b0001000000000000 ; sju
+	.word   0b0000001000100000 ; åtta
+	.word   0b0000000000000001 ; nio
+	.word   0b0000010000000000 ; tio
+	.word   0b0000100000000100 ; elva	
 .end
 	
