@@ -44,5 +44,8 @@ tlctest-flash: tlcTest.hex
 flash-erl: wordClock-erl.hex
 	avrdude -c avrisp -p m168 -P ${USBPORT} ${AVRDUDE_PARAMS} -U flash:w:wordClock-erl.hex
 
+fuse:
+	avrdude -c avrisp -p m168 -P ${USBPORT} ${AVRDUDE_PARAMS} -U lfuse:w:0xb7:m -U hfuse:w:0xdf:m -U efuse:w:0xf8:m
+	
 clean:
 	rm *~ *.o *.hex wordClock-erl
