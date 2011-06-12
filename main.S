@@ -58,8 +58,10 @@
 ;; one minute.
 ;; MINUTES_PER_STEP is defined in the relevant config.h file
 ;; 16000000 / (1024 * 255) timer ticks per second * 60 * 60
-/* .equ	TICKS_PER_STEP, (16000000 * 60 * MINUTES_PER_STEP) / (1024 * 255) */
-.equ	TICKS_PER_STEP, (16000000 * 12) / (1024 * 10 * 255)
+;; .equ	TICKS_PER_STEP, (16000000 * 60 * MINUTES_PER_STEP) / (1024 * 255)
+.equ	TICKS_PER_STEP, 18750
+	
+/* .equ	TICKS_PER_STEP, (16000000 * 2) / (1024 * 255) */
 .equ	STEPS_PER_HOUR, (60 / MINUTES_PER_STEP)
 
 .text
@@ -71,8 +73,10 @@
 	rjmp	init			;; boot & reset vector
 .org OC2Aaddr * 2
 	rjmp	TLC_spiTimerInterrupt
-.org OVF0addr * 2
-	rjmp	timerInterrupt	  	;; Timer 0 overflow
+.org OC0Aaddr * 2
+	rjmp	timerInterrupt
+	;; .org OVF0addr * 2
+	;; rjmp	timerInterrupt ; Timer 0 overflow
 .org SPIaddr * 2
 	rjmp TLC_spiInterrupt
 .org INT_VECTORS_SIZE * 2
@@ -83,6 +87,16 @@ init:
 	;; switch
 	call	TLC_init
 
+	;; Set button pins to inputs
+	cbi	BUTTON_DDR, BUTTON_PIN_INC_TIME
+	cbi	BUTTON_DDR, BUTTON_PIN_DEC_TIME
+	;; set button port pull-ups
+	;; NOTE: this is special for Erl's board, change for Mac
+	sbi	BUTTON_PORT, BUTTON_PIN_INC_TIME
+	sbi	BUTTON_PORT, BUTTON_PIN_DEC_TIME
+
+	ldi	REG_PREV_BUTTON_STATE, 0xff
+	
 	;; Initialize the time to midnight
 	ldi 	MINS_PAST, 	0	; 5 minutes past hour
 	ldi 	HOURS,		0	; hour
@@ -92,12 +106,18 @@ init:
 	ldi 	REG_TICK_COUNTER_HIGH, 	0
 
 	;; Set up timer 0 with 1024 prescaler
-	clr	REG_SCRATCH_4
+	;; 	clr	REG_SCRATCH_4   ; Overflow mode
+	ldi	REG_SCRATCH_4, 0b10	; CTC mode
 	out	TCCR0A,	REG_SCRATCH_4	; TCCR = timer/counter control register
-	ldi	REG_SCRATCH_4,	5
+	ldi	REG_SCRATCH_4,	0b00001101 ; CTC mode, 1024 prescaler
 	out	TCCR0B, REG_SCRATCH_4	; Select prescaler 1024, turn on
-	ldi	REG_SCRATCH_4,	1
-	sts	TIMSK0, REG_SCRATCH_4	; Enable interrupt on overflow (TOIE0 bit)
+	;; ldi	REG_SCRATCH_4,1	; Enable interrupt on overflow (TOIE0 bit)
+	;; Set it to count to 250
+	ldi	REG_SCRATCH_4, 250 
+	out	OCR0A,	REG_SCRATCH_4
+	ldi	REG_SCRATCH_4,	0b10	; Enable interrupt on compare A
+	sts	TIMSK0, REG_SCRATCH_4
+
 	;; TODO:
 	;; We should probably read the LDR before starting the main loop
 	;; to set the initial LED intensity.
@@ -170,10 +190,13 @@ doneSetting:
 	
 noNewTime:
 	;; Check buttons. All buttons are on port C
-	in	REG_SCRATCH_4, BUTTON_PORT
-	and	REG_SCRATCH_4, REG_PREV_BUTTON_STATE
+	in	REG_SCRATCH_4, BUTTON_PIN
+	;; Temporarily remov debounce
+	;; or	REG_SCRATCH_4, REG_PREV_BUTTON_STATE
+	;; mov	REG_PREV_BUTTON_STATE, REG_SCRATCH_4
+	
 #if TIME_STEP_BUTTONS
-	sbrs	REG_SCRATCH_4, BUTTON_PIN_INC_TIME
+	sbrc	REG_SCRATCH_4, BUTTON_PIN_INC_TIME
 	rjmp	checkForDecTime
 
 	call	incTime
@@ -183,7 +206,7 @@ timeChanged:
 	rjmp	doneButtons
 
 checkForDecTime:
-	sbrs	REG_SCRATCH_4, BUTTON_PIN_DEC_TIME
+	sbrc	REG_SCRATCH_4, BUTTON_PIN_DEC_TIME
 	rjmp	doneButtons
 
 	call	decTime
