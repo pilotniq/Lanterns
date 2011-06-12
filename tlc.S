@@ -34,10 +34,10 @@
 .equ	SCLK_PIN,	5
 .equ	GSCLK_PORT,	PORTB	; PWM reference clock
 .equ	GSCLK_PIN,	0
-.equ	XLAT_PORT,	PORTB	; Latch: HIGH sends data to DC og GS registers.
-.equ	XLAT_PIN,	1
-.equ	BLANK_PORT,	PORTB	; Blank all outputs. LOW = PWM active.
-.equ	BLANK_PIN,	2
+.equ	XLAT_PORT,	PORTD	; Latch: HIGH sends data to DC og GS registers.
+.equ	XLAT_PIN,	6
+.equ	BLANK_PORT,	PORTD	; Blank all outputs. LOW = PWM active.
+.equ	BLANK_PIN,	5
 .equ	DCPRG_PORT,	PORTD	; When DCPRG = H, DC changes DC register.
 .equ	DCPRG_PIN,	4
 .equ	VPRG_PORT,	PORTD	; When VPRG = GND, the device is in GS mode.
@@ -63,11 +63,11 @@ TLC_init:
 
 	;; Enable SPI, set clock rate fck/2, idle low, data on rise
 	;; The setting of the clock is bits 0,1 of SPCR and bit 0 of SPSR
-	;; 	ldi	REG_SCRATCH_4,	0b11010000
-	ldi	REG_SCRATCH_4,	0b11010011
+	ldi	REG_SCRATCH_4,	0b11010000
+	;; 	ldi	REG_SCRATCH_4,	0b11010011
 	out	SPCR,	REG_SCRATCH_4		; SPCR = SPI control register
-	;; 	out	SPSR,	0b00000001	; SPSR = SPI status register
-	out	SPSR,	0b00000000	; SPSR = SPI status register
+	out	SPSR,	0b00000001	; SPSR = SPI status register
+	;;	out	SPSR,	0b00000000	; SPSR = SPI status register
 
 	;; Setup timer A for SPI
 	ldi	REG_SCRATCH_4, 	0b11000010	; Set OC2A on match, No OC2, CTC Mode
@@ -394,6 +394,8 @@ TLC_setChannelTargetIntensity:
 
 	push	REG_SCRATCH_4
 	push	REG_TLC_CHANNEL_NUMBER
+	push	XL
+	push	XH
 	
 	ldi	XL,	lo8( targetChannelValues )
 	ldi	XH,	hi8( targetChannelValues )
@@ -406,6 +408,8 @@ TLC_setChannelTargetIntensity:
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
 
+	pop	XH
+	pop	XL
 	pop	REG_TLC_CHANNEL_NUMBER
 	pop	REG_SCRATCH_4
 	
