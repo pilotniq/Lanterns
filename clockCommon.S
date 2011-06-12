@@ -14,9 +14,10 @@
 ;;; Function: setOffChannels
 ;;; Takes: a bit mask in REG_SCRATCH_1,
 ;;;  a starting channel number in REG_SCRATCH_2, and
-;;;  a counter in REG_SCRATCH_3, and
+;;;  a bit counter in REG_SCRATCH_3, and
 ;;;  assumes intensity 0 set in REG_TLC_CHANNEL_INTENSITY
 ;;; Calls TLC_setChannelTargetIntensity for each bit in the mask that is zero
+;;; Increments the channel number
 clockFace_setOffChannels:
 	; Rotate Right, rightmost bit of REG_SCRATCH_1 ends up in carry
 	ror	REG_SCRATCH_1
@@ -32,8 +33,8 @@ dontTurnOff:
 	brne	clockFace_setOffChannels
 
 	ret
-
-;;; Function: setOffChannels
+	
+;;; Function: setOnhannels
 ;;; Takes: a bit mask in REG_SCRATCH_1,
 ;;;  a starting channel number in REG_SCRATCH_2, and
 ;;;  a counter in REG_SCRATCH_3, and
