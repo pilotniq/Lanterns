@@ -85,6 +85,10 @@ init:
 	;; PORT SETUP
 	;; set outputs before port direction, so values will be correct on
 	;; switch
+
+	;;
+	;; ADC Setup
+	;;
 	call	TLC_init
 
 	;; Set button pins to inputs
@@ -164,7 +168,7 @@ doneSetting:
 	cpi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP ) ; compare with immediate
 	cpc	REG_TICK_COUNTER_HIGH, REG_SCRATCH_4		; compare with carry
 	sei
-	brsh	noNewTime		; branch if minus
+	brcs	noNewTime		; branch if minus
 
 	;;
 	;; Subtract ticks from tick counter
@@ -189,11 +193,25 @@ doneSetting:
 	;;
 	
 noNewTime:
+	;; Only check buttons if tick counter is less than 60 to keep time
+	;; from advancing too quicky (tick counter is reset to 0 when time is
+	;; changed)
+	cpi	REG_TICK_COUNTER_HIGH, 0
+	brne	doCheckButtons
+
+	cpi	REG_TICK_COUNTER_LOW, 60
+	brlo	doneButtons
+	
+	;; 	rjmp	loop
+
+doCheckButtons:	
 	;; Check buttons. All buttons are on port C
+
 	in	REG_SCRATCH_4, BUTTON_PIN
+	;; 	mov	REG_SCRATCH_1, REG_SCRATCH_4
 	;; Temporarily remov debounce
-	;; or	REG_SCRATCH_4, REG_PREV_BUTTON_STATE
-	;; mov	REG_PREV_BUTTON_STATE, REG_SCRATCH_4
+	;; 	or	REG_SCRATCH_4, REG_PREV_BUTTON_STATE
+	;; 	mov	REG_PREV_BUTTON_STATE, REG_SCRATCH_1
 	
 #if TIME_STEP_BUTTONS
 	sbrc	REG_SCRATCH_4, BUTTON_PIN_INC_TIME
@@ -254,6 +272,15 @@ doneButtons:
 ;;; Increment time by one minute, wrapping hours and minutes as appropriate
 ;;;
 incTime:	
+	;; For accurate time setting, zero the counter when time is set.
+	;; This is also used to ensure that time is not advanced too fast
+	cli
+	;; Lines below cause clock to advance quickly even if button not pressed.
+	;; Don't know why.
+	clr	REG_TICK_COUNTER_LOW
+	clr	REG_TICK_COUNTER_HIGH
+	sei
+
 	inc	MINS_PAST		; 5 minutes past the hour
 	cpi	MINS_PAST, STEPS_PER_HOUR
 	brlo	noNewHour		; branch if lower
@@ -290,6 +317,13 @@ doDecMinutes:
 	dec	MINS_PAST
 
 doneDecTime:
+	;; For accurate time setting, zero the counter when time is set.
+	;; This is also used to ensure that time is not advanced too fast
+	cli
+	clr	REG_TICK_COUNTER_LOW
+	clr	REG_TICK_COUNTER_HIGH
+	sei
+
 	ret
 	
 ;;;
