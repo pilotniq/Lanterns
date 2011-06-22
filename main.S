@@ -86,9 +86,12 @@ init:
 	;; set outputs before port direction, so values will be correct on
 	;; switch
 
+	call	adc_init
 	;;
-	;; ADC Setup
+	;; Start ADC conversion now, so we have result before starting display
 	;;
+	call	adc_start
+	
 	call	TLC_init
 
 	;; Set button pins to inputs
@@ -126,14 +129,17 @@ init:
 	;; We should probably read the LDR before starting the main loop
 	;; to set the initial LED intensity.
 	;;
-	;; For now we'll set it to maximum intensity
-	ldi	REG_SCRATCH_4, 0xff
-	mov	REG_CHANNEL_INTENSITY_LOW, REG_SCRATCH_4
-	ldi	REG_SCRATCH_4, 0x0f
-	mov	REG_CHANNEL_INTENSITY_HIGH, REG_SCRATCH_4
+	;; Wait for complete ADC conversion. ADIF bit in ADCSRA
+	call	adc_wait
 
-	call	clockFace_init
+	call	setIntensityFromADC
 	
+	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
+	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
+	mov	REG_CHANNEL_INTENSITY_LOW, REG_TLC_CHANNEL_INTENSITY_LOW
+	mov	REG_CHANNEL_INTENSITY_HIGH, REG_TLC_CHANNEL_INTENSITY_HIGH
+	call	clockFace_init
+	call	clockFace_setStrings
 	;; Everything set up, enable interrupts
 	sei			; Enable interrupts
 
@@ -158,7 +164,11 @@ doneSetting:
 	breq	loop
 
 	dec	REG_TICKED	; assume atomic
-	
+
+	;; Check if ADC conversion finished, if so set new intensity target value
+	;; and start a new ADC conversion
+	call	setIntensityFromADC
+
 	;; Increment time counter if required
 	;; Time counter is in r24, increased 62.5 times per second ==
 	;; 18750 == 0x493e times per 5 minutes
@@ -349,4 +359,61 @@ doneSetting2:
 	out	0x3f, r0
 	reti
 
+	;; Uses REG_SCRATCH_4, REG_SCRATCH_1
+setIntensityFromADC:
+	ldi	REG_SCRATCH_4, ADCSRA
+	sbrs	REG_SCRATCH_4, ADIF
+	ret
+
+	;; Set intensity to (1024-ADC result)*4
+	;; 	ldi	REG_SCRATCH_4, 0x04
+	;; 	lds	REG_SCRATCH_1, ADCL
+	;; 	sub	REG_SCRATCH_4, REG_SCRATCH_1
+	;; 	clr	REG_SCRATCH_1
+	;; 	lds	REG_SCRATCH_2, ADCH
+	;; 	sbc	REG_SCRATCH_1, REG_SCRATCH_2
+
+	lds	REG_TLC_CHANNEL_INTENSITY_LOW, ADCL
+	lds	REG_TLC_CHANNEL_INTENSITY_HIGH, ADCH
+
+	;; Start next conversion
+	call	adc_start
+
+	cpi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0
+	breq	doADCMultiply
+
+	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
+	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
+	rjmp	setNewIntensities
+	
+doADCMultiply:
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
+	;; 	rjmp	setNewIntensities
+	;; Check if > 256, if so set max intensity
+	;; Multiply by 16 to get proper range
+	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
+	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+
+	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
+	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+	
+	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
+	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+	
+	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
+	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+
+setNewIntensities:
+	;; 	mov	REG_CHANNEL_INTENSITY_LOW, REG_TLC_CHANNEL_INTENSITY_LOW
+	;; 	mov	REG_CHANNEL_INTENSITY_HIGH, REG_TLC_CHANNEL_INTENSITY_HIGH
+	ldi	REG_SCRATCH_4, 3
+	mov	REG_TLC_CHANNEL_NUMBER, REG_SCRATCH_4
+	;; TODO: Continue here with fading debugging.
+	;; Entire display flickers if we call setChannelTargetIntensity for one
+	;; string here. Strange.
+	;; 	call	TLC_setChannelTargetIntensity
+	;; 	call	TLC_setNewTargetIntensity
+
+	ret
 .end
