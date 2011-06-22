@@ -70,6 +70,7 @@ clockFace_setStrings:
 	;; Loop twice, first turn channels off, then turn channels on, just to
 	;; avoid moving stuff in and out of the TLC parameter registers all the
 	;; time.
+	;; uses MINS_PAST, HOURS
 	
 	;;
 	;; Load Z with program memory address of minute word
@@ -96,7 +97,6 @@ clockFace_setStrings:
 
 	ldi	REG_SCRATCH_4, 18	; Channel number of first channel
 	mov	REG_SCRATCH_2, REG_SCRATCH_4
-	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has low byte of string
 
 	call	clockFace_setOffChannels
@@ -106,7 +106,7 @@ clockFace_setStrings:
 	;;
 	;; Handle the remaining six minute channels
 	;;
-	ldi	REG_SCRATCH_4, 5	     ; should this be 26 (18+8)?
+ 	ldi	REG_SCRATCH_4, 6	     ; should this be 26 (18+8)?
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
@@ -121,7 +121,9 @@ clockFace_setStrings:
 
 	;;
 	;; Set desired on intensity
-	;; 
+	;;
+	mov	REG_TLC_CHANNEL_INTENSITY_LOW, REG_CHANNEL_INTENSITY_LOW
+	mov	REG_TLC_CHANNEL_INTENSITY_HIGH, REG_CHANNEL_INTENSITY_HIGH
 	mov	REG_TLC_CHANNEL_INTENSITY_LOW, REG_CHANNEL_INTENSITY_LOW
 	mov	REG_TLC_CHANNEL_INTENSITY_HIGH, REG_CHANNEL_INTENSITY_HIGH
 
@@ -135,7 +137,7 @@ clockFace_setStrings:
 
 	call	clockFace_setOnChannels
 
-	ldi	REG_SCRATCH_4, 5
+	ldi	REG_SCRATCH_4, 6
 	mov	REG_SCRATCH_3, REG_SCRATCH_4 ; Counter
 	
 	lpm	REG_SCRATCH_1, Z+ ; REG_SCRATCH_1 now has high byte of string
@@ -241,6 +243,7 @@ keepHour:
 	;; LSB in each word is for string 3, bit 10 for string d
 minuteStringData:
 ;;; Minute strings are channels 18 and up
+	;;          43210987654321             
 	;;          33222222222211
 	;;          10987654321098
 	.word	0b0000000111000000 ; on the hour
