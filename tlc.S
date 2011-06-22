@@ -8,8 +8,6 @@
 ;;   r6 = SPI Byte type (0-2)
 ;;   r11:r12 = SPI Pointer
 ;; 
-;;   r21, r22 scratch for interrupt handling
-;;
 ;;   r24:r25	Scratch for interrupt handling
 ;;   r26:r27 = X Used interrupt time to index current values (but pushed)
 ;;   r28:r29 = Y Used interrupt time to index target values
@@ -27,7 +25,7 @@
 .global	TLC_init
 .global TLC_spiInterrupt
 .global TLC_spiTimerInterrupt
-
+.global TLC_setNewTargetIntensity
 
 ;; TLC5940 PIN DEFINITIONS
 .equ	SCLK_PORT,	PORTB	; Serial data shift clock.
@@ -386,7 +384,8 @@ returnFromInterrupt:
 ;;;
 ;;; Actual API
 ;;;
-;;; Parameters: channel number in r10, intensity in r11:r12
+;;; Parameters: channel number in REG_TLC_CHANNEL_NUMBER, intensity in
+;;; 	REG_TLC_CHANNEL_INTENSITY_LOW, HIGH
 ;;; Uses r10.
 ;;;
 TLC_setChannelTargetIntensity:
@@ -396,6 +395,8 @@ TLC_setChannelTargetIntensity:
 	push	REG_TLC_CHANNEL_NUMBER
 	push	XL
 	push	XH
+	push	REG_TLC_CHANNEL_INTENSITY_LOW
+	push	REG_TLC_CHANNEL_INTENSITY_HIGH
 	
 	ldi	XL,	lo8( targetChannelValues )
 	ldi	XH,	hi8( targetChannelValues )
@@ -408,6 +409,8 @@ TLC_setChannelTargetIntensity:
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
 	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
 
+	pop	REG_TLC_CHANNEL_INTENSITY_HIGH
+	pop	REG_TLC_CHANNEL_INTENSITY_LOW
 	pop	XH
 	pop	XL
 	pop	REG_TLC_CHANNEL_NUMBER
@@ -415,6 +418,53 @@ TLC_setChannelTargetIntensity:
 	
 	ret
 
+;;;
+;;; Changes all non-zero target intensities to the specified value
+;;; 
+;;; Parameters: intensity in REG_CHANNEL_INTENSITY_LOW, HIGH
+;;;
+TLC_setNewTargetIntensity:	
+	push	REG_SCRATCH_1
+	push	REG_SCRATCH_4
+	push	XL
+	push	XH
+
+	ldi	REG_SCRATCH_4, 16 * NUMBER_TLC_CHIPS
+	mov	REG_SCRATCH_1, REG_SCRATCH_4
+	
+	ldi	XL,	lo8( targetChannelValues )
+	ldi	XH,	hi8( targetChannelValues )
+
+setNewTargetLoop:
+	ld	REG_SCRATCH_4, X+
+	cpi	REG_SCRATCH_4, 0
+	brne	hitOnLowByte
+
+	ld	REG_SCRATCH_4, X+
+	cpi	REG_SCRATCH_4, 0
+	brne	hitOnHighByte
+
+setNewTargetLoopCondition:
+	dec	REG_SCRATCH_1
+	brne	setNewTargetLoop
+
+	pop	XH
+	pop	XL
+	pop	REG_SCRATCH_4
+	pop	REG_SCRATCH_1
+	
+	ret			;return is here
+hitOnLowByte:	
+	adiw	XL,	1
+
+hitOnHighByte:
+	sbiw	XL,	2
+
+	st	X+,	REG_CHANNEL_INTENSITY_LOW
+	st	X+,	REG_CHANNEL_INTENSITY_HIGH
+
+	rjmp	setNewTargetLoopCondition
+	
 	.data
 	.org	0x100
 	;;
