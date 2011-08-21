@@ -52,6 +52,9 @@
 #include "reg_mnemonics.h"
 #include "config.h"
 
+#define DO_ADC 0
+#define INITIAL_INTENSITY 0x100
+	
 ;; CONSTANTS
 ;; TICKS_PER_STEP is the number of timer0 ticks per clock step.
 ;; For Erland's clock a clock step is five minutes, for Mac's it will be
@@ -59,8 +62,16 @@
 ;; MINUTES_PER_STEP is defined in the relevant config.h file
 ;; 16000000 / (1024 * 255) timer ticks per second * 60 * 60
 ;; .equ	TICKS_PER_STEP, (16000000 * 60 * MINUTES_PER_STEP) / (1024 * 255)
+;;
+;; 16 000 000 / (1024 * 250) = 62.5 ticks/second
+;; 18750 / 62.5 = 300 seconds per step.
+;; For timing calibration, to two seconds per step
+;; If it were running to overflow, it would run 255 / 250 slow. 5/250=1/50=
+;; Would be 28 minutes/day. Is it that bad? No.
+;; Is it 1/250? Would be about 6 minutes per day. Could be.
+;; .equ	TICKS_PER_STEP, 125
 .equ	TICKS_PER_STEP, 18750
-	
+
 /* .equ	TICKS_PER_STEP, (16000000 * 2) / (1024 * 255) */
 .equ	STEPS_PER_HOUR, (60 / MINUTES_PER_STEP)
 
@@ -85,12 +96,13 @@ init:
 	;; PORT SETUP
 	;; set outputs before port direction, so values will be correct on
 	;; switch
-
+#if DO_ADC
 	call	adc_init
 	;;
 	;; Start ADC conversion now, so we have result before starting display
 	;;
 	call	adc_start
+#endif // DO_ADC
 	
 	call	TLC_init
 
@@ -120,11 +132,12 @@ init:
 	out	TCCR0B, REG_SCRATCH_4	; Select prescaler 1024, turn on
 	;; ldi	REG_SCRATCH_4,1	; Enable interrupt on overflow (TOIE0 bit)
 	;; Set it to count to 250
-	ldi	REG_SCRATCH_4, 250 
+	;; 	ldi	REG_SCRATCH_4, 250 
+	ldi	REG_SCRATCH_4, 249
 	out	OCR0A,	REG_SCRATCH_4
 	ldi	REG_SCRATCH_4,	0b10	; Enable interrupt on compare A
 	sts	TIMSK0, REG_SCRATCH_4
-
+#if DO_ADC
 	;; TODO:
 	;; We should probably read the LDR before starting the main loop
 	;; to set the initial LED intensity.
@@ -133,9 +146,10 @@ init:
 	call	adc_wait
 
 	call	setIntensityFromADC
-	
-	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
-	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
+#endif
+	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, lo8( INITIAL_INTENSITY )
+	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, hi8( INITIAL_INTENSITY )
+
 	mov	REG_CHANNEL_INTENSITY_LOW, REG_TLC_CHANNEL_INTENSITY_LOW
 	mov	REG_CHANNEL_INTENSITY_HIGH, REG_TLC_CHANNEL_INTENSITY_HIGH
 	call	clockFace_init
@@ -165,20 +179,23 @@ doneSetting:
 
 	dec	REG_TICKED	; assume atomic
 
+#if DO_ADC
 	;; Check if ADC conversion finished, if so set new intensity target value
 	;; and start a new ADC conversion
 	call	setIntensityFromADC
-
+#endif
 	;; Increment time counter if required
 	;; Time counter is in r24, increased 62.5 times per second ==
 	;; 18750 == 0x493e times per 5 minutes
-	ldi	REG_SCRATCH_4,	hi8( TICKS_PER_STEP )
+	ldi	REG_SCRATCH_4,	hi8( TICKS_PER_STEP - 1 )
 	;; CLI: make sure REG_TICK_COUNTER_HIGH, LOW don't change while comparing
 	cli			
-	cpi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP ) ; compare with immediate
+	cpi	REG_TICK_COUNTER_LOW, lo8( TICKS_PER_STEP - 1 ) ; compare with immediate
 	cpc	REG_TICK_COUNTER_HIGH, REG_SCRATCH_4		; compare with carry
 	sei
-	brcs	noNewTime		; branch if minus
+	;; Want branch if less than
+	brlt	noNewTime		; branch if minus
+	;; 	brcs	noNewTime		; branch if minus
 
 	;;
 	;; Subtract ticks from tick counter
@@ -358,7 +375,8 @@ doneSetting2:
 	pop	r0
 	out	0x3f, r0
 	reti
-
+	
+#if DO_ADC
 	;; Uses REG_SCRATCH_4, REG_SCRATCH_1
 setIntensityFromADC:
 	ldi	REG_SCRATCH_4, ADCSRA
@@ -385,11 +403,32 @@ setIntensityFromADC:
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
 	rjmp	setNewIntensities
-	
+
 doADCMultiply:
-	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
-	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x0f
-	;; 	rjmp	setNewIntensities
+	push	XL
+	push	XH
+	
+	ldi	XL,	lo8( intensityCounter )
+	ldi	XH,	hi8( intensityCounter )
+
+	ld	REG_TLC_CHANNEL_INTENSITY_LOW, X+
+	ld	REG_TLC_CHANNEL_INTENSITY_HIGH, X
+
+	adiw	REG_TLC_CHANNEL_INTENSITY_LOW, 1
+
+	ldi	XL,	lo8( intensityCounter )
+	ldi	XH,	hi8( intensityCounter )
+
+	st	X+, REG_TLC_CHANNEL_INTENSITY_LOW
+	st	X+, REG_TLC_CHANNEL_INTENSITY_HIGH
+
+	pop	XH
+	pop	XL
+
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW,
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x01
+	rjmp	setNewIntensities
+
 	;; Check if > 256, if so set max intensity
 	;; Multiply by 16 to get proper range
 	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
@@ -412,8 +451,12 @@ setNewIntensities:
 	;; TODO: Continue here with fading debugging.
 	;; Entire display flickers if we call setChannelTargetIntensity for one
 	;; string here. Strange.
-	;; 	call	TLC_setChannelTargetIntensity
+	call	TLC_setChannelTargetIntensity
 	;; 	call	TLC_setNewTargetIntensity
 
 	ret
+
+.data
+	.comm	intensityCounter, 2
+#endif
 .end

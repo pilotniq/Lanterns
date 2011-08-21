@@ -10,7 +10,7 @@
 ;; 
 ;;   r24:r25	Scratch for interrupt handling
 ;;   r26:r27 = X Used interrupt time to index current values (but pushed)
-;;   r28:r29 = Y Used interrupt time to index target values
+;;   r28:r29 = Y Used interrupt time to index target values (but pushed)
 ;;   r30:r31 = Z Used in SPI to point into current (put pushed)
 ;; ****************************************************************************
 
@@ -244,6 +244,8 @@ TLC_spiTimerInterrupt:
 	push	REG_I_SCRATCH_R0
 	push	XL
 	push	XH
+	push	YL
+	push	YH
 	push 	ZL
 	push	ZH
 	push	REG_I_CHANGE_COUNTER
@@ -373,6 +375,8 @@ returnFromInterrupt:
 	pop	REG_I_CHANGE_COUNTER
 	pop	ZH
 	pop	ZL
+	pop	YH
+	pop	YL
 	pop	XH
 	pop	XL
 	;;  restore status register
