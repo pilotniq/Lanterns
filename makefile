@@ -8,13 +8,14 @@ LD = avr-ld
 LDFLAGS = -nostdlib
 # USBPORT = /dev/parport0
 USBPORT = /dev/tty.usbserial-A6008gHF
-AVRDUDE_PARAMS = -b 19200
+#AVRDUDE_PARAMS = -b 19200 -c avrisp -p m168 -P $(USBPORT)
+AVRDUDE_PARAMS = -c dragon_isp -p m168 -P usb
 simavr = ../simavr
 IPATH = -I${simavr}/include -I${simavr}/simavr/sim
 
 LDFLAGS=${simavr}/simavr/obj-x86_64-linux-gnu/libsimavr.a -lpthread -lelf
 CFLAGS=-mmcu=atmega168 -g
-ASFLAGS=-mmcu=atmega168 -g
+ASFLAGS=-mmcu=atmega168 -Wa,--gstabs
 #include ${simavr}/Makefile.common
 
 board_lantern: board_lantern.c
@@ -35,8 +36,8 @@ testCh31: ch31TestMain.o erlClockTest.o tlc.o clockCommon.o
 tlcTest: tlcTest.o tlc.o
 	avr-ld -nostdlib tlcTest.o tlc.o -o tlcTest
 
-adcTest: adcTest.o tlc.o adc.o
-	avr-ld -nostdlib adcTest.o adc.o tlc.o -o adcTest
+adcTest: adcTest.o tlc.o adc.o erlClock.o clockCommon.o
+	avr-ld -nostdlib adcTest.o adc.o tlc.o erlClock.o clockCommon.o -o adcTest
 
 wordClock-erl: main.o tlc.o clockCommon.o erlClock.o adc.o
 	avr-ld -nostdlib main.o tlc.o clockCommon.o erlClock.o adc.o -o wordClock-erl
@@ -54,19 +55,22 @@ testCh31.hex: testCh31
 	avr-objcopy -O ihex testCh31 testCh31.hex
 
 tlctest-flash: tlcTest.hex
-	avrdude -c avrisp -p m168 -P $(USBPORT) $(AVRDUDE_PARAMS) -U flash:w:tlcTest.hex
+	avrdude  $(AVRDUDE_PARAMS) -U flash:w:tlcTest.hex
 
 testCh31-flash: testCh31.hex
-	avrdude -c avrisp -p m168 -P $(USBPORT) $(AVRDUDE_PARAMS) -U flash:w:testCh31.hex
+	avrdude  $(AVRDUDE_PARAMS) -U flash:w:testCh31.hex
 
 adcTest-flash: adcTest.hex
-	avrdude -c avrisp -p m168 -P $(USBPORT) $(AVRDUDE_PARAMS) -U flash:w:adcTest.hex
+	avrdude $(AVRDUDE_PARAMS) -U flash:w:adcTest.hex
 
 flash-erl: wordClock-erl.hex
-	avrdude -c avrisp -p m168 -P ${USBPORT} ${AVRDUDE_PARAMS} -U flash:w:wordClock-erl.hex
+	avrdude ${AVRDUDE_PARAMS} -U flash:w:wordClock-erl.hex
 
 fuse:
-	avrdude -c avrisp -p m168 -P ${USBPORT} ${AVRDUDE_PARAMS} -U lfuse:w:0xb7:m -U hfuse:w:0xdf:m -U efuse:w:0xf8:m
+	avrdude ${AVRDUDE_PARAMS} -U lfuse:w:0xb7:m -U hfuse:w:0xdf:m -U efuse:w:0xf8:m
+
+dw-fuse:
+	avrdude ${AVRDUDE_PARAMS} -U hfuse:w:0x9f:m
 
 clean:
 	rm *~ *.o *.hex wordClock-erl

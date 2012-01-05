@@ -1,4 +1,4 @@
-;; ****************************************************************************
+;; **************************************************************************
 ;; Instead of string numbers we could use offsets into GS data, byte+
 ;; half byte; nybble address
 ;;
@@ -52,9 +52,11 @@
 #include "reg_mnemonics.h"
 #include "config.h"
 
-#define DO_ADC 0
-#define INITIAL_INTENSITY 0x100
+#define DO_ADC 1
+#define INTERLACE_ADC 0
 	
+#define INITIAL_INTENSITY 0x0080
+
 ;; CONSTANTS
 ;; TICKS_PER_STEP is the number of timer0 ticks per clock step.
 ;; For Erland's clock a clock step is five minutes, for Mac's it will be
@@ -98,10 +100,12 @@ init:
 	;; switch
 #if DO_ADC
 	call	adc_init
+#if INTERLACE_ADC
 	;;
 	;; Start ADC conversion now, so we have result before starting display
 	;;
 	call	adc_start
+#endif
 #endif // DO_ADC
 	
 	call	TLC_init
@@ -138,6 +142,7 @@ init:
 	ldi	REG_SCRATCH_4,	0b10	; Enable interrupt on compare A
 	sts	TIMSK0, REG_SCRATCH_4
 #if DO_ADC
+#if INTERLACE_ADC
 	;; TODO:
 	;; We should probably read the LDR before starting the main loop
 	;; to set the initial LED intensity.
@@ -146,6 +151,7 @@ init:
 	call	adc_wait
 
 	call	setIntensityFromADC
+#endif
 #endif
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, lo8( INITIAL_INTENSITY )
 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, hi8( INITIAL_INTENSITY )
@@ -167,6 +173,7 @@ loop:
 	;      are 0, which is idle sleep mode
 	ldi 	REG_SCRATCH_4,	1
 	out	SMCR,	REG_SCRATCH_4		; SMCR = Sleep mode control register
+
 	sleep
 
 doneSetting:
@@ -180,9 +187,11 @@ doneSetting:
 	dec	REG_TICKED	; assume atomic
 
 #if DO_ADC
+#if INTERLACE_ADC
 	;; Check if ADC conversion finished, if so set new intensity target value
 	;; and start a new ADC conversion
 	call	setIntensityFromADC
+#endif
 #endif
 	;; Increment time counter if required
 	;; Time counter is in r24, increased 62.5 times per second ==
@@ -290,11 +299,22 @@ noHourUnderflow:
 
 	;; TODO: Mac, implement rest of your buttons here
 #endif
-	
-doneButtons:	
+
+doneButtons:
 	/* Check LDR, adjust PWM */
-	rjmp loop
+#if DO_ADC && !( INTERLACE_ADC )
+	/* Do ADC */
+	call	adc_start
+
+	/* Wait for ADC completion */
+	call	adc_wait
+
+	/* repeat and average to decrease flicker */
+	call	setIntensityFromADC
+#endif
 	
+	rjmp loop
+
 ;;;
 ;;; Increment time by one minute, wrapping hours and minutes as appropriate
 ;;;
@@ -375,13 +395,22 @@ doneSetting2:
 	pop	r0
 	out	0x3f, r0
 	reti
-	
+
 #if DO_ADC
 	;; Uses REG_SCRATCH_4, REG_SCRATCH_1
 setIntensityFromADC:
 	ldi	REG_SCRATCH_4, ADCSRA
 	sbrs	REG_SCRATCH_4, ADIF
+	
 	ret
+
+	;; Save r26 and r27 (XL & XH); we need to use them for adiw instruction
+	push	XL
+	push	XH
+	
+	;; Max input should be around 1.1V = 220. Assume 256. So, shift left
+	;; 4 times (time 16), max will be 4096.
+	;; Multiply by 2^4 = 16
 
 	;; Set intensity to (1024-ADC result)*4
 	;; 	ldi	REG_SCRATCH_4, 0x04
@@ -391,13 +420,15 @@ setIntensityFromADC:
 	;; 	lds	REG_SCRATCH_2, ADCH
 	;; 	sbc	REG_SCRATCH_1, REG_SCRATCH_2
 
-	lds	REG_TLC_CHANNEL_INTENSITY_LOW, ADCL
-	lds	REG_TLC_CHANNEL_INTENSITY_HIGH, ADCH
-
+	lds	XL, ADCL
+	lds	XH /* REG_TLC_CHANNEL_INTENSITY_HIGH */, ADCH
+#if INTERLACE_ADC
 	;; Start next conversion
 	call	adc_start
-
-	cpi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0
+#endif
+	;; If ADC High byte is 0, set to maximum intensity to prevent
+	;; overflow
+	cpi	XH, 0
 	breq	doADCMultiply
 
 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 0xff
@@ -405,58 +436,110 @@ setIntensityFromADC:
 	rjmp	setNewIntensities
 
 doADCMultiply:
-	push	XL
-	push	XH
+	;; Calculate 0xff - adc result
+	;; multiply by 16
+
+	;; Looks like 220 is bright, 22 is fairly low, so don't negate
+	;; Two's complement
+	;; 	com	REG_TLC_CHANNEL_INTENSITY_LOW
 	
-	ldi	XL,	lo8( intensityCounter )
-	ldi	XH,	hi8( intensityCounter )
+	;; 	ldi	REG_I_CHANGE_COUNTER, 0xff
+	;; 	sub	REG_I_CHANGE_COUNTER, REG_TLC_CHANNEL_INTENSITY_LOW
+	;; calculate adc result^2 / 16
+	;; result placed in r1:r0
+	adiw	XL, 10
+	
+	mul	XL, XL
+	brne	notZero
 
-	ld	REG_TLC_CHANNEL_INTENSITY_LOW, X+
-	ld	REG_TLC_CHANNEL_INTENSITY_HIGH, X
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 1
+	inc	r0
+notZero:	
+	;; Shift r1:r0 right 4 times
+	lsr	r1
+	ror	r0
 
-	adiw	REG_TLC_CHANNEL_INTENSITY_LOW, 1
+	lsr	r1
+	ror	r0
 
-	ldi	XL,	lo8( intensityCounter )
-	ldi	XH,	hi8( intensityCounter )
+	lsr	r1
+	ror	r0
 
-	st	X+, REG_TLC_CHANNEL_INTENSITY_LOW
-	st	X+, REG_TLC_CHANNEL_INTENSITY_HIGH
+	lsr	r1
+	ror	r0
 
-	pop	XH
-	pop	XL
+	;; Increase LED brightness at low ambient brightness by adding a constant
+	;; adiw opcode can only be used with registers 24, 26 (X), 28 (Y) or 30 (Z)
+	;; 
+	;; This also ensures intensity doesn't get set to 0, in which case the intensity would
+	;; not be restored when dimming up, because we couldn't tell which channels should be
+	;; faded up.
+	mov	XL,	r0
+	mov	XH,	r1
 
-	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW,
-	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x01
+	;;
+	;; 4096 = 256 * 16
+	;;
+	;; *** CONTINUE HERE ***
+	;; For some reasone the below does not ensure a minimum intensity of 32
+	adiw	XL,	32	; Minumum LED brightness
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+
+	;; 	adiw	XL,	63	; Minumum LED brightness
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+	;; 	adiw	XL,	63	; Minumum LED brightness = 63 + 63 = 126 ( / 4096)
+	
+
+	;; Algorithm to reduce flickering:
+	;;   Change the channel intensity by at most one unit. In effect this should average the
+	;; ADC values, and one or a couple of steps of flicker should hopefully not be noticable
+	
+	;; xh:xl have new intensity
+	cp	XL, REG_CHANNEL_INTENSITY_LOW
+	cpc	XH, REG_CHANNEL_INTENSITY_HIGH
+#	brmi	decreaseIntensity
+	brcs	decreaseIntensity
+	breq	noChange
+
+	;; 	mov	XL, REG_CHANNEL_INTENSITY_LOW
+	;; 	mov	XH, REG_CHANNEL_INTENSITY_HIGH
+
+	adiw	XL,	1
+
 	rjmp	setNewIntensities
 
-	;; Check if > 256, if so set max intensity
-	;; Multiply by 16 to get proper range
-	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
-	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+decreaseIntensity:
+	;; 	mov	XL, REG_TLC_CHANNEL_INTENSITY_LOW
+	;; 	mov	XH, REG_TLC_CHANNEL_INTENSITY_HIGH
 
-	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
-	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
-	
-	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
-	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
-	
-	lsl	REG_TLC_CHANNEL_INTENSITY_LOW
-	rol	REG_TLC_CHANNEL_INTENSITY_HIGH
+	sbiw	XL,	1
 
 setNewIntensities:
-	;; 	mov	REG_CHANNEL_INTENSITY_LOW, REG_TLC_CHANNEL_INTENSITY_LOW
-	;; 	mov	REG_CHANNEL_INTENSITY_HIGH, REG_TLC_CHANNEL_INTENSITY_HIGH
-	ldi	REG_SCRATCH_4, 3
-	mov	REG_TLC_CHANNEL_NUMBER, REG_SCRATCH_4
-	;; TODO: Continue here with fading debugging.
-	;; Entire display flickers if we call setChannelTargetIntensity for one
-	;; string here. Strange.
-	call	TLC_setChannelTargetIntensity
-	;; 	call	TLC_setNewTargetIntensity
+	mov	REG_CHANNEL_INTENSITY_LOW, XL
+	mov	REG_CHANNEL_INTENSITY_HIGH, XH
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_LOW, 32
+	;; 	ldi	REG_TLC_CHANNEL_INTENSITY_HIGH, 0x00
 
+	mov	REG_TLC_CHANNEL_INTENSITY_LOW, REG_CHANNEL_INTENSITY_LOW
+	mov	REG_TLC_CHANNEL_INTENSITY_HIGH, REG_CHANNEL_INTENSITY_HIGH
+
+	;; 	ldi	REG_SCRATCH_4, 3
+	;; 	mov	REG_TLC_CHANNEL_NUMBER, REG_SCRATCH_4
+
+ 	call	TLC_setNewTargetIntensity
+	
+noChange:
+	;; Restore registers saved on entry
+	pop	XH
+	pop	XL
+	
 	ret
-
+	
 .data
+	
 	.comm	intensityCounter, 2
 #endif
 .end

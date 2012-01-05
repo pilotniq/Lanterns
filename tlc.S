@@ -282,10 +282,10 @@ notSendingData:
 
 checkDiffsLoop:
 	/* Calculate target - current */
-	ld	REG_I_SCRATCH_R1,	Y+	; r0=Target High byte
-	ld	REG_I_LED_CURRENT_HIGH,	X+	; r0=Current High byte
+	ld	REG_I_SCRATCH_R1,	Y+	; r1=Target High byte
+	ld	REG_I_LED_CURRENT_HIGH,	X+	; r25=Current High byte
 
-	ld	REG_I_SCRATCH_R0,	Y+	; Target Low byte
+	ld	REG_I_SCRATCH_R0,	Y+	; r0=Target Low byte
 	ld	REG_I_LED_CURRENT_LOW,	X+	; Current High byte
 	
 	sub	REG_I_SCRATCH_R0, REG_I_LED_CURRENT_LOW	; r0=lo8(target-current)
@@ -419,9 +419,48 @@ TLC_setChannelTargetIntensity:
 	pop	XL
 	pop	REG_TLC_CHANNEL_NUMBER
 	pop	REG_SCRATCH_4
-	
+
 	ret
 
+;;; Just a copy of the above function for debugging dimming
+TLC_setChannelTargetIntensity2:
+	.global TLC_setChannelTargetIntensity2
+
+	;; Just for debugging, disable interrupts
+	
+	push	REG_SCRATCH_4
+	push	REG_TLC_CHANNEL_NUMBER
+	push	XL
+	push	XH
+	push	REG_TLC_CHANNEL_INTENSITY_LOW
+	push	REG_TLC_CHANNEL_INTENSITY_HIGH
+	
+	ldi	XL,	lo8( targetChannelValues )
+	ldi	XH,	hi8( targetChannelValues )
+
+	lsl	REG_TLC_CHANNEL_NUMBER
+	add	XL,	REG_TLC_CHANNEL_NUMBER
+	clr	REG_SCRATCH_4
+	adc	XH,	REG_SCRATCH_4
+
+#if 1
+	cli
+	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
+	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
+	sei
+#else	
+	st	X+,	REG_TLC_CHANNEL_INTENSITY_HIGH
+	st	X+,	REG_TLC_CHANNEL_INTENSITY_LOW
+#endif
+	pop	REG_TLC_CHANNEL_INTENSITY_HIGH
+	pop	REG_TLC_CHANNEL_INTENSITY_LOW
+	pop	XH
+	pop	XL
+	pop	REG_TLC_CHANNEL_NUMBER
+	pop	REG_SCRATCH_4
+	
+	ret
+	
 ;;;
 ;;; Changes all non-zero target intensities to the specified value
 ;;; 
@@ -442,11 +481,11 @@ TLC_setNewTargetIntensity:
 setNewTargetLoop:
 	ld	REG_SCRATCH_4, X+
 	cpi	REG_SCRATCH_4, 0
-	brne	hitOnLowByte
+	brne	hitOnHighByte
 
 	ld	REG_SCRATCH_4, X+
 	cpi	REG_SCRATCH_4, 0
-	brne	hitOnHighByte
+	brne	hitOnLowByte
 
 setNewTargetLoopCondition:
 	dec	REG_SCRATCH_1
@@ -458,14 +497,15 @@ setNewTargetLoopCondition:
 	pop	REG_SCRATCH_1
 	
 	ret			;return is here
-hitOnLowByte:	
+hitOnHighByte:	
 	adiw	XL,	1
 
-hitOnHighByte:
+hitOnLowByte:
 	sbiw	XL,	2
 
-	st	X+,	REG_CHANNEL_INTENSITY_LOW
+	;; Note: Target values table is stored high-endian as opposed to normal AVR ordering
 	st	X+,	REG_CHANNEL_INTENSITY_HIGH
+	st	X+,	REG_CHANNEL_INTENSITY_LOW
 
 	rjmp	setNewTargetLoopCondition
 	
@@ -484,7 +524,6 @@ hitOnHighByte:
 	;;
 	;; Stored big-endian to be consistend with currentChannelValues
 	;;
-
 	.comm	targetChannelValues, 2 * 16 * NUMBER_TLC_CHIPS
 
 	.end

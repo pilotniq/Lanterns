@@ -28,6 +28,13 @@ adc_init:
 	;; ACME=Analog Comparator Multiplexer Enable
 	ldi	REG_SCRATCH_4, 0
 	sts	ADCSRB, REG_SCRATCH_4
+
+	;; Switch pull-up resistor off for analog in 0
+	cbi	PORTC, 0
+
+	;; Set analog 0 as input
+	cbi	DDRC,  0
+	
 	;; Disable digital input buffer on ADC pin 0 to save power
 	ldi	REG_SCRATCH_4, 1
 	sts	DIDR0, REG_SCRATCH_4
